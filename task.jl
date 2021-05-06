@@ -3,7 +3,7 @@
 # full license information.
 
 """
-Task
+_Task
 
 Represents Stuff
 
@@ -20,28 +20,33 @@ Represents Stuff
 # Methods
 - `val::Type{Any}`: words
 """
-mutable struct Task
+mutable struct _Task
     ID::Int64
-    alpha::Float64
-    complexity::Symbol
-    work::Dict{Symbol,Int64}
+    Children::Vector{Int64}
+    Type::Symbol
+    Cost::Float64
+    Alpha::Float64
 
-    data::Int64
-
-    function Task(
-        ID::Int64,
-        alpha::Float64,
-        complexity::Symbol,
-        work::Dict{Symbol,Int64},
-        data::Int64=0,
-        comm::Symbol=:none,
-        target::Int64=-1,
-        cost::Float64=0.0,
-    ) begin
-        return new(ID, alpha, complexity, work, data, comm, target, cost)
-    end
+    _Task(ID::Int64, Children::Vector{Int64}, Type::Symbol, Cost::Float64=0.0, Alpha::Float64=0.0) =
+        new(ID, Children, Type, Cost, Alpha)
 end
 
-work(task::Task, n::Int64) = (task.work - n) < 0 ? 0 : task.work -= n
-workRemaining(task::Task) = sum(x->x.second, task)
-isDone(task::Task) = task.work.first === 0
+work(task::_Task, n::Int64) = (task.work - n) < 0 ? 0 : task.work -= n
+isDone(task::_Task) = task.work === 0
+
+
+function ParseTask(cfg::String, final=false)
+    config = split(cfg, " ")
+
+    ID = parse(Int, config[2])
+    Children = Vector{Int64}()
+    Type = Symbol(config[4])
+    Cost = parse(Float64, config[5])
+    Alpha = parse(Float64, config[6])
+
+    if !final
+        Children = split(config[3], ",") |> s->String.(s) |> i->parse.(Int, i)
+    end
+
+    return _Task(ID, Children, Type, Cost, Alpha)
+end

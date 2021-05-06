@@ -1,8 +1,19 @@
-
-include("DAG.jl")
+using SimLynx
+include("daggen.jl")
 
 verbose = false
+tasks = nothing
 
-out = daggen_init()
 
-println(out)
+Resource()
+
+function main()
+    tasklist, num_tasks = daggen()
+    tasks = ListToDictDAG(tasklist)
+
+
+
+    return
+end
+
+main()

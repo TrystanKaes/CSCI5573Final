@@ -31,7 +31,7 @@ mutable struct _Task
         new(ID, Children, Type, Cost, Alpha)
 end
 
-work(task::_Task, n::Int64) = (task.work - n) < 0 ? 0 : task.work -= n
+worked(task::_Task, n::Int64) = (task.work - n) < 0 ? 0 : task.work -= n
 isDone(task::_Task) = task.work === 0
 
 

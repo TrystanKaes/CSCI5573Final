@@ -1,7 +1,7 @@
 # This is all a bit ugly. Lets just not talk about it.
 include("task.jl")
 
-function ListToDictDAG(tasklist)
+function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()
     for task in tasklist[1:end-1]
         new_task = ParseTask(task)
@@ -10,7 +10,18 @@ function ListToDictDAG(tasklist)
 
     new_task = ParseTask(tasklist[end], true)
     dag[new_task.ID] = new_task
-    dag[-1] = new_task # For Ease of peaking
+
+    for (ID, _task) in dag
+        for child in _task.Children
+            if _task.Type === :COMPUTATION
+                add_dependency!(dag[child], ID)
+            end
+        end
+    end
+
+    if length(dot_file) > 0
+        writeDOT(dot_file, dag)
+    end
 
     return dag
 end
@@ -70,7 +81,8 @@ function daggen(;
     jmp = (jump == -1) ? `` : ` --jump $jump`
     dt = !dot ? `` : ` --dot`
 
-    command = `$base $out $mind $maxd $mina $maxa $fat $cr $jmp $dt`
+    command = `$base $out $num $mind $maxd $mina $maxa $fat $cr $jmp $dt`
+    print(command)
 
     daggen_init()
 
@@ -91,4 +103,30 @@ end
 
 function daggen_clean()
     return run(`rm dag_generator`)
+end
+
+function writeDOT(Filename, dag)
+    open(Filename, "w") do file
+        write(file, "digraph DAG_Schedule {\n")
+
+        for i in 1:length(dag)-1 # Write self
+            task = dag[i]
+            color = task.Type == :TRANSFER ? "grey" : "black"
+
+            node = "  T$(task.ID) [size=\"$(task.Cost)\", "
+            node *= "overhead=\"$(task.Complexity)\", "
+            node *= "color=\"$(color)\"]\n"
+            write(file, node)
+
+            for ID in task.Children
+                child = dag[ID]
+                edge = "  T$(task.ID) -> T$(child.ID) "
+                edge *= "[size=\"$(task.Cost)\", "
+                edge *= "color=\"$(color)\"]\n"
+                write(file, edge)
+            end
+        end
+
+        write(file, "}\n")
+    end
 end

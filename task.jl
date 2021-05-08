@@ -24,17 +24,20 @@ mutable struct _Task
     ID::Int64
     Children::Vector{Int64}
     Type::Symbol
-    Cost::Float64
+    Cost::Int64
     Complexity::Float64
 
     Dependencies::Vector{Int64}
 
-    _Task(ID::Int64, Children::Vector{Int64}, Type::Symbol, Cost::Float64=0.0, Complexity::Float64=0.0) =
+    _Task(ID::Int64, Children::Vector{Int64}, Type::Symbol, Cost::Int64=0, Complexity::Float64=0.0) =
         new(ID, Children, Type, Cost, Complexity, Vector{Int64}())
+
+
 end
 
-working!(task::_Task, n::Int64) = (task.work - n) < 0 ? 0 : task.work -= n
-isDone(task::_Task) = task.work === 0
+withComplexity(task::_Task, n::Int64) = n + Int64(round(n*task.Complexity))
+working!(task::_Task, n::Int64) = (task.Cost - n) < 0 ? task.Cost=0 : task.Cost -= n
+isDone(task::_Task) = task.Cost === 0
 
 add_dependency!(task::_Task, ID::Int64) = push!(task.Dependencies, ID)
 remove_dependency!(task::_Task, ID::Int64) = deleteat!(task.Dependencies, task.Dependencies .== ID)
@@ -46,8 +49,8 @@ function ParseTask(cfg::String, final=false)
     ID = parse(Int, config[2])
     Children = Vector{Int64}()
     Type = Symbol(config[4])
-    Cost = parse(Float64, config[5])/10_000_000
-    Complexity = parse(Float64, config[6])
+    Cost = parse(Float64, config[5])/1_000_000_000 |> round |> Int64
+    Complexity = parse(Float64, config[6]) |> n -> n > 0.0 ? n : 0.1
 
     if !final
         Children = split(config[3], ",") |> s->String.(s) |> i->parse.(Int, i)

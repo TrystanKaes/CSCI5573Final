@@ -71,7 +71,7 @@ function daggen(;
 
     base = `./dag_generator`
     out = (outfile == "") ? `` : ` -o $outfile`
-    num = (num_tasks == -1) ? `` : ` -n $num_tasks`
+    num = (num_tasks == -1) ? `` : ` -n $(Int64(round(num_tasks/2-sqrt(num_tasks+1))))` # Weird Stuff here
     mind = (mindata == -1) ? `` : ` --mindata $mindata`
     maxd = (maxdata == -1) ? `` : ` --maxdata $maxdata`
     mina = (minalpha == -1) ? `` : ` --minalpha $minalpha`
@@ -83,7 +83,6 @@ function daggen(;
 
     command = `$base $out $num $mind $maxd $mina $maxa $fat $cr $jmp $dt`
     print(command)
-
     daggen_init()
 
     buffer = IOBuffer()

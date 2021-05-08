@@ -1,24 +1,27 @@
 using SimLynx
 include("daggen.jl")
 
+RUN_NAME="Sim1"
+
 MAX_TASKS=100
 N_BUSSES = 10 # Number of communication buffers
 N_PROCESSORS = 5
-CLOCK_CYCLE = 1//10
-QUANTUM = -1.0 # -1 is "until done"
-COMM_TIMEOUT = 100
+CLOCK_CYCLE = 1
+QUANTUM = -1 # -1 is "until done"
+COMM_TIMEOUT = 5
 COMM_INTERRUPT_CYCLES = 10 # How many clock cycles to handle IO queueing
 
-tasks = nothing
-
-IOBuses = nothing
+tasks      = nothing
+IOBuses    = nothing
 PROCESSORS = nothing
-
 ReadyQueue = nothing
 Terminated = nothing
-IOQueue = nothing
+IOQueue    = nothing
 
 function IncomingCommunication(receiver::Int64)
+    if IOBuses.queue === nothing
+        return nothing
+    end
     for allocation in IOBuses.queue
         io_task = tasks[process_store(allocation.process, :process_task)]
 
@@ -30,21 +33,27 @@ function IncomingCommunication(receiver::Int64)
 end
 
 @process Enqueuer() begin
-    enqueue!(ReadyQueue, 0)
+    local Incoming = sort(collect(keys(tasks)))
+    push!(Terminated, 0)
+
     while(length(tasks) > 2)
         local finished = Terminated
 
         for ID in finished # Check whether new processes are ready
             for child in tasks[ID].Children
                 remove_dependency!(tasks[child], ID)
-                if length(tasks[child].Dependencies) == 0
+                if length(tasks[child].Dependencies) == 0 && child in Incoming
+                    println("Enqueuing $child")
                     enqueue!(ReadyQueue, child)
+
+                    deleteat!(Incoming, Incoming .== child)
                 end
             end
+            println("Killing $ID")
             deleteat!(Terminated, Terminated .== ID) # Remove finished processes
             delete!(tasks, ID) # Remove this task
         end
-        work(CLOCK_CYCLE)
+        wait(CLOCK_CYCLE)
     end
 end
 
@@ -59,39 +68,57 @@ end
     end
 end
 
-@process Dispatcher(i::Int64, work_time::Float64) begin
-    process_store!(current_process(), :process_task, i)
-    local this_task = tasks[i]
+@process IOHandler() begin
+    while(length(tasks) > 2)
+        if !isempty(IOQueue)
+            ID = dequeue!(IOQueue)
+            @schedule now Sender(ID, COMM_TIMEOUT)
+        end
 
-    incoming, io_process = IncomingCommunication(this_task.ID)
+        work(CLOCK_CYCLE)
+    end
+end
 
-    if incoming
-        io_task = tasks[process_store(io_process, :process_task)]
+
+@process Dispatcher(ID::Int64, time::Int64) begin
+    process_store!(current_process(), :process_task, ID)
+    local this_task = tasks[ID]
+
+    io_process = IncomingCommunication(this_task.ID)
+
+
+
+    if io_process !== nothing
+        comm_cost = tasks[process_store(io_process, :process_task)].Cost
         notice = interrupt(io_process)
 
-        io_time = notice.time + io_task.Cost
+        process_store!(io_process, :connected, true)
+        resume(io_process, Notice(current_time(), io_process))
 
-        @schedule now SendRecieve(io_time)
-        @schedule in io_time IOProcess(io_task.ID, :SENDER)
-        @schedule in io_time IOProcess(this_task.ID, :RECIEVER)
+        @schedule now Reciever(ID, Int64(round(comm_cost)))
         return
     end
 
     if this_task.Type === :TRANSFER
         @with_resource PROCESSORS begin
-            enqueue!(IOQueue, this_task.ID)
+            if isDone(this_task)
+                push!(Terminated, this_task.ID)
+            else
+                enqueue!(IOQueue, this_task.ID)
+            end
             work(COMM_INTERRUPT_CYCLES*CLOCK_CYCLE)
         end
     end
 
     if this_task.Type === :COMPUTATION
         @with_resource PROCESSORS begin
-            if work_time === -1.0
-                work_time = this_task.Cost*this_task.Complexity
+            if time === -1
+                time = withComplexity(this_task, this_task.Cost)
             end
 
-            working!(this_task, work_time)
-            work(work_time)
+            # println("$(this_task.ID) working for $time")
+            working!(this_task, time)
+            work(time)
 
             if isDone(this_task)
                 push!(Terminated, this_task.ID)
@@ -102,24 +129,13 @@ end
     end
 end
 
-@process IOHandler() begin
-    while(length(tasks) > 2)
-        if !isempty(IOQueue)
-            ID = dequeue!(IOQueue)
-            local io_task = tasks[ID]
-            @schedule now Sender(COMM_TIMEOUT)
-        end
-
-        work(CLOCK_CYCLE)
-    end
-end
 
 
-@process Sender(time::Int64) begin
-    process_store!(current_process(), :process_task, i)
+@process Sender(ID::Int64, time::Int64) begin
+    process_store!(current_process(), :process_task, ID)
     process_store!(current_process(), :connected, false)
 
-    local this_task = tasks[i]
+    local this_task = tasks[ID]
 
     if isDone(this_task)
         push!(Terminated, this_task.ID)
@@ -129,9 +145,8 @@ end
 
         for _ in 1:time
             if process_store(current_process(), :connected)
-                working!(this_task, work_time)
+                working!(this_task, this_task.Cost)
                 work(this_task.Cost)
-                release(IOBuses)
                 break
             end
 
@@ -139,20 +154,18 @@ end
         end
         release(IOBuses)
     end
+
+    enqueue!(ReadyQueue, this_task.ID)
     return nothing
 end
 
-@process Reciever(time::Float64) begin
-    process_store!(current_process(), :process_task, i)
-    local task = tasks[i]
+@process Reciever(ID::Int64, time::Int64) begin
+    process_store!(current_process(), :process_task, ID)
+    local this_task = tasks[ID]
 
-    if isDone(task)
-        push!(Terminated, task.ID)
-    else
-        enqueue!(ReadyQueue, task.ID)
-    end
-
-    work(CLOCK_CYCLE)
+    working!(this_task, time)
+    work(time)
+    enqueue!(ReadyQueue, this_task.ID)
 end
 
 @process Sherlock() begin
@@ -168,7 +181,7 @@ function main()
 
     @simulation begin
         # current_trace!(true)
-        global tasks = ListToDictDAG(tasklist, "dagGraph.dot")
+        global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
         global PROCESSORS = Resource(N_PROCESSORS, "CPU")
@@ -178,36 +191,43 @@ function main()
 
         global Terminated = []
 
-        # current_trace!(true)
+        # sleep(1) # Sync
 
-        @schedule at 0 Enqueuer()
-        @schedule at 0 IOHandler()
-        @schedule at 0 Sherlock()
+        @schedule now Enqueuer()
+
         @schedule at 0 Scheduler()
+
+        @schedule at 1 IOHandler()
+
+        # @schedule at 3 Sherlock()
 
         start_simulation()
 
         println()
         print_stats(IOBuses.queue_length, title="Queue Length Statistics")
-        plot_history(IOBuses.queue_length, file="graphs/IOQueuelength.png", title="IO Queue Length History")
+        plot_history(IOBuses.queue_length, file="$RUN_NAME/IOQueuelength.png", title="IO Queue Length History")
 
         println()
         print_stats(ReadyQueue.n, title="Ready Queue Length Statistics")
-        plot_history(PROCESSORS.n, file="graphs/ReadyQueuelength.png", title="Processor Queue Length History")
+        plot_history(PROCESSORS.n, file="$RUN_NAME/ReadyQueuelength.png", title="Processor Queue Length History")
 
         println()
         print_stats(PROCESSORS.allocated, title="Processor Allocation Statistics")
-        plot_history(PROCESSORS.allocated, file="graphs/ReadyQueueAllocation.png", title="Processor Allocation History")
+        plot_history(PROCESSORS.allocated, file="$RUN_NAME/ReadyQueueAllocation.png", title="Processor Allocation History")
 
         println()
         print_stats(PROCESSORS.queue_length, title="Processor Queue Length Statistics")
-        plot_history(PROCESSORS.queue_length, file="graphs/ProcessorQueuelength.png", title="Processor Queue Length History")
+        plot_history(PROCESSORS.queue_length, file="$RUN_NAME/ProcessorQueuelength.png", title="Processor Queue Length History")
 
         println()
         print_stats(PROCESSORS.wait, title="Processor Queue Wait Time Statistics")
-        plot_history(PROCESSORS.wait, file="graphs/ProcessorQueueWait.png", title="Processor Queue Wait Time History")
+        plot_history(PROCESSORS.wait, file="$RUN_NAME/ProcessorQueueWait.png", title="Processor Queue Wait Time History")
 
     end
+end
+
+if !isdir(RUN_NAME)
+    mkdir(RUN_NAME)
 end
 
 main()

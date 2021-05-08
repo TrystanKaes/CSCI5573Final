@@ -1,14 +1,14 @@
 using SimLynx
 include("daggen.jl")
 
-RUN_NAME="Sim1"
+RUN_NAME="Cody"
 
-MAX_TASKS=100
+MAX_TASKS=40
 N_BUSSES = 10 # Number of communication buffers
 N_PROCESSORS = 5
 CLOCK_CYCLE = 1
 QUANTUM = -1 # -1 is "until done"
-COMM_TIMEOUT = 5
+COMM_TIMEOUT = 10
 COMM_INTERRUPT_CYCLES = 10 # How many clock cycles to handle IO queueing
 
 tasks      = nothing
@@ -33,7 +33,7 @@ function IncomingCommunication(receiver::Int64)
 end
 
 @process Enqueuer() begin
-    local Incoming = sort(collect(keys(tasks)))
+    local Incoming = deepcopy(sort(collect(keys(tasks))))
     push!(Terminated, 0)
 
     while(length(tasks) > 2)
@@ -42,14 +42,25 @@ end
         for ID in finished # Check whether new processes are ready
             for child in tasks[ID].Children
                 remove_dependency!(tasks[child], ID)
-                if length(tasks[child].Dependencies) == 0 && child in Incoming
-                    println("Enqueuing $child")
+                dependencies_met = length(tasks[child].Dependencies) == 0 && child in Incoming
+
+                parent = :TRANSFER
+                for i in tasks[child].Dependencies
+                    println("ID: $i is a $(tasks[i].Type)")
+                    if tasks[i].Type === :COMPUTATION
+                        parent = :COMPUTATION
+                    end
+                end
+
+                # println("Enqueuing $child")
+                if dependencies_met || parent === :TRANSFER
                     enqueue!(ReadyQueue, child)
 
                     deleteat!(Incoming, Incoming .== child)
                 end
+
             end
-            println("Killing $ID")
+            # println("Killing $ID")
             deleteat!(Terminated, Terminated .== ID) # Remove finished processes
             delete!(tasks, ID) # Remove this task
         end
@@ -85,8 +96,6 @@ end
     local this_task = tasks[ID]
 
     io_process = IncomingCommunication(this_task.ID)
-
-
 
     if io_process !== nothing
         comm_cost = tasks[process_store(io_process, :process_task)].Cost
@@ -131,7 +140,7 @@ end
 
 
 
-@process Sender(ID::Int64, time::Int64) begin
+@process Sender(ID::Int64, timeout::Int64) begin
     process_store!(current_process(), :process_task, ID)
     process_store!(current_process(), :connected, false)
 
@@ -143,7 +152,7 @@ end
     else
         request(IOBuses)
 
-        for _ in 1:time
+        for _ in 1:timeout
             if process_store(current_process(), :connected)
                 working!(this_task, this_task.Cost)
                 work(this_task.Cost)
@@ -180,11 +189,11 @@ function main()
     tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
 
     @simulation begin
-        # current_trace!(true)
+        current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
-        global PROCESSORS = Resource(N_PROCESSORS, "CPU")
+        global PROCESSORS = Resource(N_PROCESSORS, "PROCESSORS")
 
         global IOQueue = FifoQueue{Int64}()
         global ReadyQueue = FifoQueue{Int64}()
@@ -204,24 +213,22 @@ function main()
         start_simulation()
 
         println()
-        print_stats(IOBuses.queue_length, title="Queue Length Statistics")
-        plot_history(IOBuses.queue_length, file="$RUN_NAME/IOQueuelength.png", title="IO Queue Length History")
+        print_stats(IOBuses.available, title="IO Bus Availability Statistics")
+        plot_history(IOBuses.wait, file="$RUN_NAME/IOQueueWait.png", title="IO Bus Wait History")
+        plot_history(IOBuses.allocated, file="$RUN_NAME/IOQueueAllocation.png", title="IO Bus Allocation History")
 
         println()
-        print_stats(ReadyQueue.n, title="Ready Queue Length Statistics")
-        plot_history(PROCESSORS.n, file="$RUN_NAME/ReadyQueuelength.png", title="Processor Queue Length History")
+        print_stats(PROCESSORS.available, title="Processor Availability Statistics")
+        plot_history(PROCESSORS.wait, file="$RUN_NAME/ProcessorWait.png", title="Processor Wait History")
+        plot_history(PROCESSORS.allocated, file="$RUN_NAME/ProcessorAllocation.png", title="Processor Allocation History")
 
         println()
-        print_stats(PROCESSORS.allocated, title="Processor Allocation Statistics")
-        plot_history(PROCESSORS.allocated, file="$RUN_NAME/ReadyQueueAllocation.png", title="Processor Allocation History")
+        print_stats(IOQueue.n, title="IO Queue Statistics")
+        plot_history(IOQueue.n, file="$RUN_NAME/IOQueue.png", title="IO Queue History")
 
         println()
-        print_stats(PROCESSORS.queue_length, title="Processor Queue Length Statistics")
-        plot_history(PROCESSORS.queue_length, file="$RUN_NAME/ProcessorQueuelength.png", title="Processor Queue Length History")
-
-        println()
-        print_stats(PROCESSORS.wait, title="Processor Queue Wait Time Statistics")
-        plot_history(PROCESSORS.wait, file="$RUN_NAME/ProcessorQueueWait.png", title="Processor Queue Wait Time History")
+        print_stats(ReadyQueue.n, title="Ready Queue Statistics")
+        plot_history(ReadyQueue.n, file="$RUN_NAME/ReadyQueue.png", title="Ready Queue History")
 
     end
 end

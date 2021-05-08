@@ -13,9 +13,7 @@ function ListToDictDAG(tasklist, dot_file="")
 
     for (ID, _task) in dag
         for child in _task.Children
-            if _task.Type === :COMPUTATION
-                add_dependency!(dag[child], ID)
-            end
+            add_dependency!(dag[child], ID)
         end
     end
 
@@ -82,7 +80,6 @@ function daggen(;
     dt = !dot ? `` : ` --dot`
 
     command = `$base $out $num $mind $maxd $mina $maxa $fat $cr $jmp $dt`
-    print(command)
     daggen_init()
 
     buffer = IOBuffer()

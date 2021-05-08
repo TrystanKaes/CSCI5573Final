@@ -32,7 +32,6 @@ mutable struct _Task
     _Task(ID::Int64, Children::Vector{Int64}, Type::Symbol, Cost::Int64=0, Complexity::Float64=0.0) =
         new(ID, Children, Type, Cost, Complexity, Vector{Int64}())
 
-
 end
 
 withComplexity(task::_Task, n::Int64) = n + Int64(round(n*task.Complexity))

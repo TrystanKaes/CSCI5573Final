@@ -34,36 +34,50 @@ end
 
 @process Enqueuer() begin
     local Incoming = deepcopy(sort(collect(keys(tasks))))
+    active_tasks = []
+
     push!(Terminated, 0)
 
     while(length(tasks) > 2)
         local finished = Terminated
 
-        for ID in finished # Check whether new processes are ready
+        for ID in  finished # Clean up finished tasks and enqueue newly ready tasks
             for child in tasks[ID].Children
                 remove_dependency!(tasks[child], ID)
-                dependencies_met = length(tasks[child].Dependencies) == 0 && child in Incoming
 
-                parent = :TRANSFER
-                for i in tasks[child].Dependencies
-                    println("ID: $i is a $(tasks[i].Type)")
-                    if tasks[i].Type === :COMPUTATION
-                        parent = :COMPUTATION
-                    end
-                end
-
-                # println("Enqueuing $child")
-                if dependencies_met || parent === :TRANSFER
+                println("Enqueuing $child")
+                if length(tasks[child].Dependencies) == 0 && child in Incoming
                     enqueue!(ReadyQueue, child)
+
+                    push!(active_tasks, child)
+                    deleteat!(Incoming, Incoming .== child)
+                end
+            end
+            println("Killing $ID")
+            deleteat!(Terminated, Terminated .== ID) # Remove finished processes
+            delete!(tasks, ID) # Remove this task
+
+            deleteat!(active_tasks, active_tasks .== ID)
+        end
+
+        # println(Terminated)
+
+        # println(filter(x->tasks[x].Type === :TRANSFER, active_tasks), active_tasks)
+        for ID in filter(x->tasks[x].Type === :TRANSFER, active_tasks)
+            for child in tasks[ID].Children
+                remove_dependency!(tasks[child], ID)
+
+                println("Enqueuing $child")
+                if length(tasks[child].Dependencies) == 0 && child in Incoming
+                    enqueue!(ReadyQueue, child)
+                    push!(active_tasks, child)
 
                     deleteat!(Incoming, Incoming .== child)
                 end
-
             end
-            # println("Killing $ID")
-            deleteat!(Terminated, Terminated .== ID) # Remove finished processes
-            delete!(tasks, ID) # Remove this task
+            deleteat!(active_tasks, active_tasks .== ID)
         end
+
         wait(CLOCK_CYCLE)
     end
 end
@@ -125,7 +139,7 @@ end
                 time = withComplexity(this_task, this_task.Cost)
             end
 
-            # println("$(this_task.ID) working for $time")
+            println("$(this_task.ID) working for $time")
             working!(this_task, time)
             work(time)
 
@@ -189,7 +203,7 @@ function main()
     tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
 
     @simulation begin
-        current_trace!(true)
+        # current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")

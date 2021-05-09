@@ -43,7 +43,6 @@ function working!(task::_Task, n::Int64)
     return task.Cost
 end
 
-withComplexity(task::_Task, n::Int64) = n + Int64(round(n*task.Complexity))
 isDone(task::_Task) = task.Cost === 0
 
 add_dependency!(task::_Task, ID::Int64) = push!(task.Dependencies, ID)

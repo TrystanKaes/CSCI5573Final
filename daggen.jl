@@ -1,6 +1,4 @@
 # This is all a bit ugly. Lets just not talk about it.
-include("task.jl")
-
 function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()
     for task in tasklist[1:end-1]
@@ -43,7 +41,7 @@ function daggen_init()
     end
 
     chmod("daggen_init", 2000)
-    run(`daggen_init`)
+    run(`./daggen_init`)
     rm("daggen_init")
 end
 

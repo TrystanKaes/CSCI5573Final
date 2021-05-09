@@ -8,28 +8,40 @@ N_BUSSES = 10 # Number of communication buffers
 N_PROCESSORS = 5
 CLOCK_CYCLE = 1
 QUANTUM = -1 # -1 is "until done"
-COMM_TIMEOUT = 10
+COMM_TIMEOUT = 100
 COMM_INTERRUPT_CYCLES = 10 # How many clock cycles to handle IO queueing
 
-tasks      = nothing
-IOBuses    = nothing
-PROCESSORS = nothing
-ReadyQueue = nothing
-Terminated = nothing
-IOQueue    = nothing
+tasks        = nothing
+IOBuses      = nothing
+IOBusesQueue = nothing
+PROCESSORS   = nothing
+ReadyQueue   = nothing
+Terminated   = nothing
+IOQueue      = nothing
 
 COMPLETE = false
 
+function tracking_request(process, resource)
+    request(resource)
+    push!(IOBusesQueue, process) # XXX: This might run when it isn't supposed to.
+end
+
+function tracking_release(process, resource)
+    release(resource)
+    filter!(e->e!==process, IOBusesQueue)
+end
+
 function IncomingCommunication(receiver::Int64)
-    if IOBuses.queue === nothing
-        return nothing
-    end
 
-    for allocation in IOBuses.queue
-        io_task = tasks[process_store(allocation.process, :process_task)]
+    for process in IOBusesQueue
+        io_task = tasks[process_store(process, :process_task)]
 
-        if io_task.Children[begin].ID === receiver
-            return allocation.process
+        print(io_task)
+
+        for child in io_task.Children
+            if child === receiver
+                return process
+            end
         end
     end
 
@@ -49,7 +61,6 @@ end
 
     push!(Terminated, 0)
     filter!(e->e!==0, Incoming)
-    println(Incoming)
 
     while(true)
         launch = []
@@ -71,12 +82,10 @@ end
 
         wait(CLOCK_CYCLE)
 
-        println("Active Tasks", active_tasks)
         for ID in copy(active_tasks)
-            println(ID)
             for child in tasks[ID].Children
                 only_comms = true
-                println("Dependencies", copy(tasks[child].Dependencies))
+                # println("Dependencies", copy(tasks[child].Dependencies))
                 for dep in copy(tasks[child].Dependencies)
                     if tasks[dep].Type !== :TRANSFER
                         only_comms = false
@@ -93,12 +102,20 @@ end
 
         filter!(e->e in Incoming, launch)
 
-        for task in launch
+        if !isempty(launch)
+            println("launching:", launch)
+        end
+
+        for task in copy(launch)
             println("Enqueuing $task")
             enqueue!(ReadyQueue, task)
             filter!(e->e!==task, Incoming)
-            push!(active_tasks, task) |> unique!
+            push!(active_tasks, task)
         end
+
+        println("Active Tasks", active_tasks)
+        println("Ready Queue", ReadyQueue.data)
+        println("IO Bus", IOBusesQueue)
 
         if length(Incoming) === 0 && length(active_tasks) === 1 && length(Terminated) === 0
             COMPLETE = true
@@ -149,6 +166,7 @@ end
     io_process = IncomingCommunication(this_task.ID)
 
     if io_process !== nothing
+        println(this_task)
         comm_task = tasks[process_store(io_process, :process_task)]
         comm_time = comm_task.Cost
         notice = interrupt(io_process)
@@ -159,6 +177,11 @@ end
         resume(io_process, Notice(current_time(), io_process))
 
         @schedule now Reciever(ID, Int64(round(comm_time)))
+        return
+    end
+
+    if length(this_task.Dependencies) > 0
+        enqueue!(ReadyQueue, this_task.ID)
         return
     end
 
@@ -179,7 +202,7 @@ end
                 time = withComplexity(this_task, this_task.Cost)
             end
 
-            println("$(this_task.ID) working for $time")
+            # println("$(this_task.ID) working for $time")
             working!(this_task, time)
             work(time)
 
@@ -204,18 +227,22 @@ end
         push!(Terminated, this_task.ID)
         return nothing
     else
-        request(IOBuses)
+        tracking_request(current_process(), IOBuses)
+
+        println("requested IO")
 
         for _ in 1:timeout
             if process_store(current_process(), :connected)
+                println("I am sending...", this_task)
                 working!(this_task, this_task.Cost)
                 work(this_task.Cost)
+                push!(Terminated, this_task.ID)
                 break
             end
 
             wait(CLOCK_CYCLE)
         end
-        release(IOBuses)
+        tracking_release(current_process(), IOBuses)
     end
 
     enqueue!(ReadyQueue, this_task.ID)
@@ -225,6 +252,8 @@ end
 @process Reciever(ID::Int64, time::Int64) begin
     process_store!(current_process(), :process_task, ID)
     local this_task = tasks[ID]
+
+    println("I am recieving...", this_task)
 
     working!(this_task, time)
     work(time)
@@ -243,10 +272,11 @@ function main()
     tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
 
     @simulation begin
-        current_trace!(true)
+        # current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
+        global IOBusesQueue = []
         global PROCESSORS = Resource(N_PROCESSORS, "PROCESSORS")
 
         global IOQueue = FifoQueue{Int64}()

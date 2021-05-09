@@ -334,6 +334,10 @@ end
 
 # main()
 
-tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
+tasklist, num_tasks = daggen(num_tasks=30)
 dag = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
-println(dag[length(dag)-1])
+ranks = RankHeft(dag)
+
+for rank in sort(ranks)
+    println(rank)
+end

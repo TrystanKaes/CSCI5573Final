@@ -15,17 +15,27 @@ end
 
 # ----------------------------- Begin HEFT -----------------------------
 function RankHeft(task_graph)
-    ranks::Dict{Int64,Float64}()
-    exit_node = task_graph[length(task_graph)-1]
+    ranks = Dict{Int64,Float64}()
 
-    function RecursiveRankTask(ID, ranks)
+    RecursiveRankTask(ID, ranks) = begin
         task = task_graph[ID]
 
-        ranks[ID] = task.Cost
+        rank = 0.0
+        for child in task.Children
+            new_rank = RecursiveRankTask(child, ranks)
+            if new_rank > rank
+                rank = new_rank
+            end
+        end
+
+        ranks[ID] = task.Cost + rank
+        return ranks[ID]
     end
 
-end
+    RecursiveRankTask(0, ranks)
 
+    return ranks
+end
 
 @process HEFTScheduler() begin
     while(true)

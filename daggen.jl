@@ -43,7 +43,7 @@ function daggen_init()
     end
 
     chmod("daggen_init", 2000)
-    run(`daggen_init`)
+    run(`./daggen_init`)
     rm("daggen_init")
 end
 

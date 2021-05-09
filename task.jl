@@ -27,12 +27,10 @@ mutable struct _Task
     Cost::Int64
     Complexity::Float64
 
-    ProcessorMultiplier::Float64
-
     Dependencies::Vector{Int64}
 
     _Task(ID::Int64, Children::Vector{Int64}, Type::Symbol, Cost::Int64=0, Complexity::Float64=0.0) =
-        new(ID, Children, Type, Cost, Complexity, 1.0, Vector{Int64}())
+        new(ID, Children, Type, Cost, Complexity, Vector{Int64}())
 
 end
 
@@ -45,12 +43,6 @@ function working!(task::_Task, n::Int64)
     return task.Cost
 end
 
-function AssignToProcessor(task::_Task, f::Float64)
-    task.Cost = Int64(round(task.Cost * f))
-    task.ProcessorMultiplier = f
-end
-
-withComplexity(task::_Task, n::Int64) = n + Int64(round(n*task.Complexity))
 isDone(task::_Task) = task.Cost === 0
 
 add_dependency!(task::_Task, ID::Int64) = push!(task.Dependencies, ID)

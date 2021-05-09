@@ -4,7 +4,7 @@
     while(true)
         if !isempty(ReadyQueue)
             ID = dequeue!(ReadyQueue)
-            @schedule now Dispatcher(ID, QUANTUM)
+            @schedule now Dispatcher(ID, PROCESSOR, QUANTUM)
         end
 
         work(CLOCK_CYCLE)
@@ -23,11 +23,8 @@ function RankHeft(task_graph)
         rank = 0.0
         for child in task.Children
             new_rank = RecursiveRankTask(child, ranks)
-            if new_rank > rank
-                rank = new_rank
-            end
+            rank = max(new_rank, rank)
         end
-
         ranks[ID] = task.Cost + rank
         return ranks[ID]
     end
@@ -37,7 +34,22 @@ function RankHeft(task_graph)
     return ranks
 end
 
-@process HEFTScheduler() begin
+function AFTHeft(ranks, processors)
+    AFT = Dict{Int64,Float64}()
+
+    for (ID, rank) in ranks
+        ranks[ID] = max((processors .* rank)...) |> round
+    end
+
+    return ranks
+end
+
+@process HEFTScheduler(processors) begin
+    rank = RankHeft(tasks)
+    aft = AFTHeft(rank, processors)
+
+    global AVAILABLE_PROCESSORS
+
     while(true)
         readyList = []
         while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
@@ -45,7 +57,17 @@ end
             push!(readyList, ID)
         end
 
-        # Schedule Stuff with readyList
+        max_rank = 0.0
+        ni = -1
+        for task in readyList
+            if rank[task] > max_rank
+                ni = task
+            end
+        end
+
+        min(TotalWork.(PROCESSORS))
+
+
 
         work(CLOCK_CYCLE)
     end

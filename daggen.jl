@@ -97,6 +97,19 @@ function daggen(;
     return String.(tasklist), num_task
 end
 
+function pregen_daggen(file)
+    dag = readlines(file)
+
+    # This processes the IOBuffer as a String array
+    tasklist = dag |> l->deleteat!(l,[1,2,length(l)])
+
+    num_task = tasklist[1] |> c->split(c, " ") |> n->n[2] |> i->parse(Int, i)
+
+    deleteat!(tasklist, 1) # delete count from tasklist
+
+    return String.(tasklist), num_task
+end
+
 function daggen_clean()
     return run(`rm dag_generator`)
 end

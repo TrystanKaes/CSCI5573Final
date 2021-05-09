@@ -1,5 +1,6 @@
 using SimLynx
 include("daggen.jl")
+include("algorithms.jl")
 
 verbose = false
 RUN_NAME="Cody"
@@ -129,17 +130,6 @@ end
         end
 
         wait(CLOCK_CYCLE)
-    end
-end
-
-@process Scheduler() begin
-    while(true)
-        if !isempty(ReadyQueue)
-            ID = dequeue!(ReadyQueue)
-            @schedule now Dispatcher(ID, QUANTUM)
-        end
-
-        work(CLOCK_CYCLE)
     end
 end
 
@@ -295,9 +285,9 @@ function main()
 
         @schedule now Enqueuer()
 
-        @schedule at 0 Scheduler()
+        @schedule at 0 FCFSScheduler()
 
-        @schedule at 1 IOHandler()
+        @schedule at 0 IOHandler()
 
         start_simulation()
 

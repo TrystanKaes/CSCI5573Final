@@ -3,15 +3,16 @@ include("daggen.jl")
 include("algorithms.jl")
 
 verbose = false
+
 RUN_NAME="Cody"
 
 MAX_TASKS=1000
 N_BUSSES = 10 # Number of communication buffers
-N_PROCESSORS = 5
 CLOCK_CYCLE = 1
 QUANTUM = -1 # -1 is "until done"
 COMM_TIMEOUT = 100
 COMM_INTERRUPT_CYCLES = 10 # How many clock cycles to handle IO queueing
+COMPLETE = false
 
 tasks        = nothing
 IOBuses      = nothing
@@ -21,14 +22,23 @@ ReadyQueue   = nothing
 Terminated   = nothing
 IOQueue      = nothing
 
-COMPLETE = false
 
-function tracking_request(process, resource)
+N_PROCESSORS = 5
+heterogeneous = false
+AVAILABLE_PROCESSORS = [
+    0.9,
+    0.7,
+    0.3,
+    0.6,
+    0.2,
+]
+
+function io_request(process, resource)
     request(resource)
     push!(IOBusesQueue, process) # XXX: This might run when it isn't supposed to.
 end
 
-function tracking_release(process, resource)
+function io_release(process, resource)
     release(resource)
     filter!(e->e!==process, IOBusesQueue)
 end
@@ -75,6 +85,10 @@ end
 
             if verbose
                 println("Killing $ID")
+            end
+
+            if heterogeneous
+                push!(AVAILABLE_PROCESSORS, tasks[ID].ProcessorMultiplier)
             end
 
             filter!(e->e!==ID, active_tasks)
@@ -145,7 +159,7 @@ end
 end
 
 
-@process Dispatcher(ID::Int64, time::Int64) begin
+@process Dispatcher(ID::Int64, time::Int64, proccesor::Float64) begin
     process_store!(current_process(), :process_task, ID)
     local this_task = tasks[ID]
 
@@ -161,20 +175,22 @@ end
         stop_simulation()
     end
 
-    io_process = IncomingCommunication(this_task.ID)
+    @with_resource PROCESSORS begin
+        io_process = IncomingCommunication(this_task.ID)
 
-    if io_process !== nothing
-        comm_task = tasks[process_store(io_process, :process_task)]
-        comm_time = comm_task.Cost
-        notice = interrupt(io_process)
+        if io_process !== nothing
+            comm_task = tasks[process_store(io_process, :process_task)]
+            comm_time = comm_task.Cost
+            notice = interrupt(io_process)
 
-        remove_dependency!(this_task, comm_task.ID)
+            remove_dependency!(this_task, comm_task.ID)
 
-        process_store!(io_process, :connected, true)
-        resume(io_process, Notice(current_time(), io_process))
+            process_store!(io_process, :connected, true)
+            resume(io_process, Notice(current_time(), io_process))
 
-        @schedule now Reciever(ID, Int64(round(comm_time)))
-        return
+            @schedule now Reciever(ID, Int64(round(comm_time)))
+            return
+        end
     end
 
     if length(this_task.Dependencies) > 0
@@ -223,7 +239,7 @@ end
         push!(Terminated, this_task.ID)
         return nothing
     else
-        tracking_request(current_process(), IOBuses)
+        io_request(current_process(), IOBuses)
         for _ in 1:timeout
             if process_store(current_process(), :connected)
                 if verbose
@@ -236,7 +252,7 @@ end
 
             wait(CLOCK_CYCLE)
         end
-        tracking_release(current_process(), IOBuses)
+        io_release(current_process(), IOBuses)
     end
 
     enqueue!(ReadyQueue, this_task.ID)
@@ -316,4 +332,8 @@ if !isdir(RUN_NAME)
     mkdir(RUN_NAME)
 end
 
-main()
+# main()
+
+tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
+dag = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
+println(dag[length(dag)-1])

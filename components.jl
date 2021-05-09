@@ -1,10 +1,10 @@
 # ----------------------------- Begin Processor -----------------------------
 mutable struct Processor
-    working::_Task
+    task::Union{_Task, Nothing}
     Multiplier::Float64
     resource::Resource
     queue::Vector{Any}
-    Processor(Multiplier, resource) = new(0, nothing, Multiplier, resource, Vector{Any}())
+    Processor(Multiplier, resource) = new(nothing, Multiplier, resource, Vector{Int64}())
 end
 
 busy(processor::Processor) = length(processor.queue) == 0
@@ -19,33 +19,33 @@ end
 
 function SendToProcessor(processor::Processor, ID::Int64, time::Int64)
     push!(processor.queue, ID)
-    @with_resource processor::Processor.resource begin
+    @with_resource processor.resource begin
         if !(ID in processor.queue)
             return
         end
 
         filter!(e->e!==ID, processor.queue)
 
-        processor.working = tasks[ID]
+        processor.task = tasks[ID]
 
         for i in 1:time
-            work = Int64(round(1/processor.Multiplier))
-            working!(this_task, work)
+            task_work = Int64(round(1/processor.Multiplier))
+            working!(processor.task, task_work)
 
             work(CLOCK_CYCLE)
 
-            if isDone(this_task)
+            if isDone(processor.task)
                 break
             end
         end
 
-        if isDone(this_task)
-            push!(Terminated, this_task.ID)
+        if isDone(processor.task)
+            push!(Terminated, processor.task.ID)
         else
-            enqueue!(ReadyQueue, this_task.ID)
+            enqueue!(ReadyQueue, processor.task.ID)
         end
     end
-    processor.working = nothing
+    processor.task = nothing
 end
 
 # ----------------------------- End Processor -----------------------------
@@ -224,7 +224,7 @@ end
     end
 
     if this_task.Type === :TRANSFER
-        SendToProcessor(processor, ID, COMM_INTERRUPT_CYCLES)
+        SendToProcessor(PROCESSORS[processor], ID, COMM_INTERRUPT_CYCLES)
         if isDone(this_task)
             push!(Terminated, this_task.ID)
         else
@@ -254,7 +254,7 @@ end
             return
         end
 
-        SendToProcessor(processor, ID, time)
+        SendToProcessor(PROCESSORS[processor], ID, time)
     end
 end
 # ----------------------------- End Routing -----------------------------

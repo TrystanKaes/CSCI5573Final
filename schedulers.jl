@@ -1,17 +1,20 @@
 
 # ----------------------------- Begin FCFS -----------------------------
 @process FCFSScheduler() begin
+    processor = 0
     while(true)
         if !isempty(ReadyQueue)
             ID = dequeue!(ReadyQueue)
-            @schedule now Dispatcher(ID, PROCESSOR, QUANTUM)
+            work_time = tasks[ID].Cost
+            @schedule now Dispatcher(ID, processor, work_time)
         end
+
+        processor = processor === length(PROCESSORS) ? 1 : processor + 1
 
         work(CLOCK_CYCLE)
     end
 end
 # ----------------------------- End FCFS -----------------------------
-
 
 # ----------------------------- Begin HEFT -----------------------------
 function RankHeft(task_graph)
@@ -34,21 +37,21 @@ function RankHeft(task_graph)
     return ranks
 end
 
-function AFTHeft(ranks, processors)
+function AFTHeft(ranks, _processors)
     AFT = Dict{Int64,Float64}()
 
     for (ID, rank) in ranks
-        ranks[ID] = max((processors .* rank)...) |> round
+        ranks[ID] = max((_processors .* rank)...) |> round
     end
 
     return ranks
 end
 
-@process HEFTScheduler(processors) begin
+@process HEFTScheduler(_processors) begin
     rank = RankHeft(tasks)
-    aft = AFTHeft(rank, processors)
+    aft = AFTHeft(rank, _processors)
 
-    global AVAILABLE_PROCESSORS
+    global PROCESSORS
 
     while(true)
         readyList = []
@@ -65,10 +68,6 @@ end
             end
         end
 
-        min(TotalWork.(PROCESSORS))
-
-
-
         work(CLOCK_CYCLE)
     end
 end
@@ -77,7 +76,6 @@ end
 
 # ----------------------------- Begin PEFT -----------------------------
 @process PEFTScheduler() begin
-    available_processors = copy(AVAILABLE_PROCESSORS)
     while(true)
         readyList = []
         while(!isempty(ReadyQueue)) # Empty the queue to start scheduling

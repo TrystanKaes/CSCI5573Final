@@ -1,5 +1,5 @@
 RUN_NAME="Cody"
-MAX_TASKS=1000
+MAX_TASKS=40
 N_BUSSES = 10 # Number of communication buffers
 CLOCK_CYCLE = 1
 QUANTUM = -1 # -1 is "until done"

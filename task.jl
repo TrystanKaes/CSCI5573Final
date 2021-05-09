@@ -34,8 +34,16 @@ mutable struct _Task
 
 end
 
+function working!(task::_Task, n::Int64)
+    if task.Cost - n <= 0
+        task.Cost = 0
+    else
+        task.Cost = task.Cost - n
+    end
+    return task.Cost
+end
+
 withComplexity(task::_Task, n::Int64) = n + Int64(round(n*task.Complexity))
-working!(task::_Task, n::Int64) = (task.Cost - n) < 0 ? task.Cost=0 : task.Cost -= n
 isDone(task::_Task) = task.Cost === 0
 
 add_dependency!(task::_Task, ID::Int64) = push!(task.Dependencies, ID)
@@ -48,8 +56,11 @@ function ParseTask(cfg::String, final=false)
     ID = parse(Int, config[2])
     Children = Vector{Int64}()
     Type = Symbol(config[4])
+
     Cost = parse(Float64, config[5])/1_000_000_000 |> round |> Int64
-    Complexity = parse(Float64, config[6]) |> n -> n > 0.0 ? n : 0.1
+    Cost = Cost > 0 ? Cost : 1
+
+    Complexity = parse(Float64, config[6])
 
     if !final
         Children = split(config[3], ",") |> s->String.(s) |> i->parse.(Int, i)

@@ -18,10 +18,13 @@ ReadyQueue = nothing
 Terminated = nothing
 IOQueue    = nothing
 
+COMPLETE = false
+
 function IncomingCommunication(receiver::Int64)
     if IOBuses.queue === nothing
         return nothing
     end
+
     for allocation in IOBuses.queue
         io_task = tasks[process_store(allocation.process, :process_task)]
 
@@ -29,53 +32,76 @@ function IncomingCommunication(receiver::Int64)
             return allocation.process
         end
     end
+
     return nothing
 end
 
 @process Enqueuer() begin
-    local Incoming = deepcopy(sort(collect(keys(tasks))))
+    local Incoming::Vector{Int64} = []
+
+    println(collect(keys(tasks)))
+
+    for i in 1:length(unique(collect(keys(tasks))))
+        push!(Incoming, i-1)
+    end
+
     active_tasks = []
 
     push!(Terminated, 0)
+    filter!(e->e!==0, Incoming)
+    println(Incoming)
 
-    while(length(tasks) > 2)
-        local finished = Terminated
+    while(true)
+        launch = []
 
-        for ID in  finished # Clean up finished tasks and enqueue newly ready tasks
-            for child in tasks[ID].Children
+        # Clean up finished tasks and enqueue newly ready tasks
+        for ID in copy(Terminated)
+            for child in copy(tasks[ID].Children)
                 remove_dependency!(tasks[child], ID)
 
-                println("Enqueuing $child")
-                if length(tasks[child].Dependencies) == 0 && child in Incoming
-                    enqueue!(ReadyQueue, child)
-
-                    push!(active_tasks, child)
-                    deleteat!(Incoming, Incoming .== child)
+                if length(tasks[child].Dependencies) === 0 && child in Incoming
+                    push!(launch, child)
                 end
             end
             println("Killing $ID")
-            deleteat!(Terminated, Terminated .== ID) # Remove finished processes
-            delete!(tasks, ID) # Remove this task
-
-            deleteat!(active_tasks, active_tasks .== ID)
+            filter!(e->e!==ID, active_tasks)
+            filter!(e->e!==ID, Terminated)
+            filter!(e->e!==ID, Incoming)
         end
 
-        # println(Terminated)
+        wait(CLOCK_CYCLE)
 
-        # println(filter(x->tasks[x].Type === :TRANSFER, active_tasks), active_tasks)
-        for ID in filter(x->tasks[x].Type === :TRANSFER, active_tasks)
+        println("Active Tasks", active_tasks)
+        for ID in copy(active_tasks)
+            println(ID)
             for child in tasks[ID].Children
-                remove_dependency!(tasks[child], ID)
+                only_comms = true
+                println("Dependencies", copy(tasks[child].Dependencies))
+                for dep in copy(tasks[child].Dependencies)
+                    if tasks[dep].Type !== :TRANSFER
+                        only_comms = false
+                    end
+                end
 
-                println("Enqueuing $child")
-                if length(tasks[child].Dependencies) == 0 && child in Incoming
-                    enqueue!(ReadyQueue, child)
-                    push!(active_tasks, child)
-
-                    deleteat!(Incoming, Incoming .== child)
+                if only_comms
+                    push!(launch, child)
                 end
             end
-            deleteat!(active_tasks, active_tasks .== ID)
+        end
+
+        wait(CLOCK_CYCLE)
+
+        filter!(e->e in Incoming, launch)
+
+        for task in launch
+            println("Enqueuing $task")
+            enqueue!(ReadyQueue, task)
+            filter!(e->e!==task, Incoming)
+            push!(active_tasks, task) |> unique!
+        end
+
+        if length(Incoming) === 0 && length(active_tasks) === 1 && length(Terminated) === 0
+            COMPLETE = true
         end
 
         wait(CLOCK_CYCLE)
@@ -83,7 +109,7 @@ end
 end
 
 @process Scheduler() begin
-    while(length(tasks) > 2)
+    while(true)
         if !isempty(ReadyQueue)
             ID = dequeue!(ReadyQueue)
             @schedule now Dispatcher(ID, QUANTUM)
@@ -94,7 +120,7 @@ end
 end
 
 @process IOHandler() begin
-    while(length(tasks) > 2)
+    while(true)
         if !isempty(IOQueue)
             ID = dequeue!(IOQueue)
             @schedule now Sender(ID, COMM_TIMEOUT)
@@ -109,16 +135,30 @@ end
     process_store!(current_process(), :process_task, ID)
     local this_task = tasks[ID]
 
+    if this_task.Type === :END
+        for task in tasks
+            println(task)
+        end
+        println("End Queued")
+        while(!COMPLETE)
+            wait(1)
+        end
+        stop_simulation()
+    end
+
     io_process = IncomingCommunication(this_task.ID)
 
     if io_process !== nothing
-        comm_cost = tasks[process_store(io_process, :process_task)].Cost
+        comm_task = tasks[process_store(io_process, :process_task)]
+        comm_time = comm_task.Cost
         notice = interrupt(io_process)
+
+        remove_dependency!(this_task, comm_task.ID)
 
         process_store!(io_process, :connected, true)
         resume(io_process, Notice(current_time(), io_process))
 
-        @schedule now Reciever(ID, Int64(round(comm_cost)))
+        @schedule now Reciever(ID, Int64(round(comm_time)))
         return
     end
 
@@ -203,7 +243,7 @@ function main()
     tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
 
     @simulation begin
-        # current_trace!(true)
+        current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")

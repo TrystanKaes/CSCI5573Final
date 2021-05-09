@@ -1,9 +1,10 @@
 using SimLynx
 include("daggen.jl")
 
+verbose = false
 RUN_NAME="Cody"
 
-MAX_TASKS=40
+MAX_TASKS=1000
 N_BUSSES = 10 # Number of communication buffers
 N_PROCESSORS = 5
 CLOCK_CYCLE = 1
@@ -36,8 +37,6 @@ function IncomingCommunication(receiver::Int64)
     for process in IOBusesQueue
         io_task = tasks[process_store(process, :process_task)]
 
-        print(io_task)
-
         for child in io_task.Children
             if child === receiver
                 return process
@@ -50,8 +49,6 @@ end
 
 @process Enqueuer() begin
     local Incoming::Vector{Int64} = []
-
-    println(collect(keys(tasks)))
 
     for i in 1:length(unique(collect(keys(tasks))))
         push!(Incoming, i-1)
@@ -74,7 +71,11 @@ end
                     push!(launch, child)
                 end
             end
-            println("Killing $ID")
+
+            if verbose
+                println("Killing $ID")
+            end
+
             filter!(e->e!==ID, active_tasks)
             filter!(e->e!==ID, Terminated)
             filter!(e->e!==ID, Incoming)
@@ -85,7 +86,6 @@ end
         for ID in copy(active_tasks)
             for child in tasks[ID].Children
                 only_comms = true
-                # println("Dependencies", copy(tasks[child].Dependencies))
                 for dep in copy(tasks[child].Dependencies)
                     if tasks[dep].Type !== :TRANSFER
                         only_comms = false
@@ -102,23 +102,30 @@ end
 
         filter!(e->e in Incoming, launch)
 
-        if !isempty(launch)
-            println("launching:", launch)
+        if verbose
+            if !isempty(launch)
+                println("launching:", launch)
+            end
         end
 
+
         for task in copy(launch)
-            println("Enqueuing $task")
+            if verbose
+                println("Enqueuing $task")
+            end
             enqueue!(ReadyQueue, task)
             filter!(e->e!==task, Incoming)
             push!(active_tasks, task)
         end
 
-        println("Active Tasks", active_tasks)
-        println("Ready Queue", ReadyQueue.data)
-        println("IO Bus", IOBusesQueue)
+        if verbose
+            println("Active Tasks", active_tasks)
+            println("Ready Queue", ReadyQueue.data)
+            println("IO Bus", IOBusesQueue)
+        end
 
-        if length(Incoming) === 0 && length(active_tasks) === 1 && length(Terminated) === 0
-            COMPLETE = true
+        if length(Incoming) === 0 & length(active_tasks) === 1 & length(Terminated) === 0
+            global COMPLETE = true
         end
 
         wait(CLOCK_CYCLE)
@@ -153,11 +160,12 @@ end
     local this_task = tasks[ID]
 
     if this_task.Type === :END
-        for task in tasks
-            println(task)
+        if verbose
+            println("End Queued")
         end
-        println("End Queued")
+        global COMPLETE
         while(!COMPLETE)
+            println(COMPLETE)
             wait(1)
         end
         stop_simulation()
@@ -166,7 +174,6 @@ end
     io_process = IncomingCommunication(this_task.ID)
 
     if io_process !== nothing
-        println(this_task)
         comm_task = tasks[process_store(io_process, :process_task)]
         comm_time = comm_task.Cost
         notice = interrupt(io_process)
@@ -202,7 +209,6 @@ end
                 time = withComplexity(this_task, this_task.Cost)
             end
 
-            # println("$(this_task.ID) working for $time")
             working!(this_task, time)
             work(time)
 
@@ -228,15 +234,13 @@ end
         return nothing
     else
         tracking_request(current_process(), IOBuses)
-
-        println("requested IO")
-
         for _ in 1:timeout
             if process_store(current_process(), :connected)
-                println("I am sending...", this_task)
+                if verbose
+                    println("I am sending...", this_task)
+                end
                 working!(this_task, this_task.Cost)
                 work(this_task.Cost)
-                push!(Terminated, this_task.ID)
                 break
             end
 
@@ -253,7 +257,9 @@ end
     process_store!(current_process(), :process_task, ID)
     local this_task = tasks[ID]
 
-    println("I am recieving...", this_task)
+    if verbose
+        println("I am recieving...", this_task)
+    end
 
     working!(this_task, time)
     work(time)
@@ -272,7 +278,9 @@ function main()
     tasklist, num_tasks = daggen(num_tasks=MAX_TASKS)
 
     @simulation begin
-        # current_trace!(true)
+        if verbose
+            current_trace!(true)
+        end
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
@@ -284,15 +292,12 @@ function main()
 
         global Terminated = []
 
-        # sleep(1) # Sync
 
         @schedule now Enqueuer()
 
         @schedule at 0 Scheduler()
 
         @schedule at 1 IOHandler()
-
-        # @schedule at 3 Sherlock()
 
         start_simulation()
 

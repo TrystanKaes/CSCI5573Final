@@ -16,10 +16,13 @@ end
 # ----------------------------- Begin HEFT -----------------------------
 @process HEFTScheduler() begin
     while(true)
-        if !isempty(ReadyQueue)
+        readyList = []
+        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
             ID = dequeue!(ReadyQueue)
-            @schedule now Dispatcher(ID, QUANTUM)
+            push!(readyList, ID)
         end
+
+        # Schedule Stuff with readyList
 
         work(CLOCK_CYCLE)
     end
@@ -30,10 +33,13 @@ end
 # ----------------------------- Begin PEFT -----------------------------
 @process PEFTScheduler() begin
     while(true)
-        if !isempty(ReadyQueue)
+        readyList = []
+        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
             ID = dequeue!(ReadyQueue)
-            @schedule now Dispatcher(ID, QUANTUM)
+            push!(readyList, ID)
         end
+
+        # Schedule Stuff with readyList
 
         work(CLOCK_CYCLE)
     end

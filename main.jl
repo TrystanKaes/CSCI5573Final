@@ -7,7 +7,7 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
-verbose = true
+verbose = false
 COMPLETE = false
 
 tasks = nothing
@@ -23,7 +23,7 @@ function main()
 
     @simulation begin
         if verbose
-            # current_trace!(true)
+            current_trace!(true)
         end
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
@@ -73,12 +73,12 @@ function main()
             )
             plot_history(
                 PROCESSORS[i].resource.wait,
-                file = "$RUN_NAME/ProcessorWait.png",
+                file = "$RUN_NAME/Processor$(i)Wait.png",
                 title = "Processor $i Wait History",
             )
             plot_history(
                 PROCESSORS[i].resource.allocated,
-                file = "$RUN_NAME/ProcessorAllocation.png",
+                file = "$RUN_NAME/Processor$(i)Allocation.png",
                 title = "Processor $i Allocation History",
             )
         end
@@ -103,17 +103,3 @@ if !isdir(RUN_NAME)
 end
 
 main()
-
-# tasklist, num_tasks = daggen(num_tasks=30)
-# dag = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
-# ranks = RankHeft(dag)
-
-# for rank in sort(ranks)
-#     println(rank)
-# end
-
-# afts = AFTHeft(ranks, PROCESSOR_POWERS)
-
-# for aft in sort(afts)
-#     println(aft)
-# end

@@ -57,7 +57,8 @@ function main(dag_file="")
         @schedule now Enqueuer()
 
         # @schedule at 0 FCFSScheduler()
-        @schedule at 0 HEFTScheduler()
+        # @schedule at 0 HEFTScheduler()
+        @schedule at 0 PEFTScheduler()
 
         start_simulation()
 
@@ -98,6 +99,7 @@ function main(dag_file="")
             file = "$(RUN_PATH)/ReadyQueue.png",
             title = "Ready Queue History",
         )
+
     end
 end
 
@@ -106,4 +108,17 @@ if !isdir(SIM_RUN)
 end
 
 println("Starting simulation")
-main()
+# main()
+
+PROCESSORS = []
+
+for i = 1:length(PROCESSOR_POWERS)
+    r = Resource(1, "PROCESSOR $i")
+    m = PROCESSOR_POWERS[i]
+    push!(PROCESSORS, Processor(m, r))
+end
+
+tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
+tasks, comms = ListToDictDAG(tasklist, "test.dot")
+
+OCT()

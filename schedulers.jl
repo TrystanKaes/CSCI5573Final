@@ -128,8 +128,6 @@ end
             @schedule now Dispatcher(ni, pj, comm_cost, tasks[ni].Cost)
         end
 
-        # Schedule
-
         work(CLOCK_CYCLE)
     end
 end
@@ -137,5 +135,95 @@ end
 
 
 # ----------------------------- Begin PEFT -----------------------------
+function W_peft(tj, pw)
+    return PROCESSORS[pw].Multiplier * tasks[tj].Cost
+end
 
+function OCT() # Paper used recursion but... it blows the stack.
+    exit_task = max(unique(collect(keys(tasks)))...)
+
+    oct = Matrix{Int64}(undef, exit_task, length(PROCESSORS))
+    rank = Matrix{Int64}(undef, exit_task, length(PROCESSORS))
+
+    optimal_cost
+
+    task_list = sort(collect(keys(tasks)), lt=(a,b)->a>b)
+
+    for task in task_list
+        if task === exit_task
+            for p in 1:length(PROCESSORS)
+                oct[task][p] = 0.0
+            end
+        else
+
+        end
+    end
+    # _OCT(ti, pk) = begin
+    #     for i in 1:length(PROCESSORS)
+    #         for j in 1:length(PROCESSORS)
+    #             Oct[i][j]=rank[b][i]+comm[b][j]
+    #         end
+    #     end
+    # end
+
+
+    # for ID in tasks
+    #     if ID === exit_task
+    #         for p in 1:length(PROCESSORS)
+    #             rank[ID][p] = 0.0
+    #         end
+    #         # for(int j=0;j<nodes;j++)rank[i][j]=0.0;
+    #     end
+    # end
+end
+
+# _OCT(ti, pk) = begin
+#     for i in 1:length(PROCESSORS)
+#         for j in 1:length(PROCESSORS)
+#             Oct[i][j]=rank[b][i]+comm[b][j]
+#         end
+#     end
+# end
+
+
+# for ID in tasks
+#     if ID === exit_task
+#         for p in 1:length(PROCESSORS)
+#             rank[ID][p] = 0.0
+#         end
+#         # for(int j=0;j<nodes;j++)rank[i][j]=0.0;
+#     end
+# end
+
+@process PEFTScheduler() begin
+    rank_oct = RankOct(tasks)
+    aft = AFT_heft(rankU, PROCESSORS)
+
+
+    while(true)
+        if isempty(ReadyQueue)
+            wait(CLOCK_CYCLE)
+            continue
+        end
+
+        readyList = []
+
+        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
+            ID = dequeue!(ReadyQueue)
+            push!(readyList, ID)
+        end
+
+        while(length(readyList) > 0)
+            readyList = sort(readyList, lt=(a, b) -> rank_oct[a] > rank_oct[b])
+            println("\n")
+            println(readyList)
+            println("\n")
+            println("\n")
+            println(rank_oct)
+            println("\n")
+
+        end
+        work(CLOCK_CYCLE)
+    end
+end
 # ----------------------------- End PEFT -----------------------------

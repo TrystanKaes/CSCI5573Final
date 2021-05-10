@@ -3,8 +3,14 @@
 # full license information.
 
 # This is all a bit ugly. Lets just not talk about it.
+struct Edge
+    ID1::Int64
+    ID2::Int64
+end
+
 function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()
+    comm_cost = Dict{Edge, Int64}()
 
     for task in tasklist[1:end-1]
         new_task = ParseTask(task)
@@ -20,11 +26,49 @@ function ListToDictDAG(tasklist, dot_file="")
         end
     end
 
+    # writeDOT("pre", dag)
+
+    # Extract edges
+    for (ID, _task) in copy(dag)
+        if _task.Type === :TRANSFER
+
+            parent = _task.Dependencies[begin]
+            child = _task.Children[begin]
+
+            # Add edges. Just for giggles we do both directions
+            comm_cost[Edge(parent, child)] = _task.Cost
+            comm_cost[Edge(child, parent)] = _task.Cost
+
+            # Remove edge from the parent child relationship
+            filter!(e->e!==ID, dag[parent].Children)
+            filter!(e->e!==ID, dag[child].Dependencies)
+
+            # Reconnect the parent and child without edge
+            push!(dag[parent].Children, child)
+            push!(dag[child].Dependencies, parent)
+
+            # Delete Edge from dag
+            delete!(dag, ID)
+        end
+    end
+
+    # Finally add in all of the non-comm edges
+    for (ID, _task) in copy(dag)
+        for child in _task.Children
+            if !haskey(comm_cost, Edge(ID, child))
+                comm_cost[Edge(ID, child)] = 0
+                comm_cost[Edge(child, ID)] = 0
+            end
+        end
+    end
+
+    # writeDOT("post", dag)
+
     if length(dot_file) > 0
         writeDOT(dot_file, dag)
     end
 
-    return dag
+    return dag, comm_cost
 end
 
 
@@ -121,8 +165,7 @@ function writeDOT(Filename, dag)
     open(Filename, "w") do file
         write(file, "digraph DAG_Schedule {\n")
 
-        for i in 1:length(dag)-1 # Write self
-            task = dag[i]
+        for (_, task) in sort(dag) # Write self
             color = task.Type == :TRANSFER ? "grey" : "black"
 
             node = "  T$(task.ID) [size=\"$(task.Cost)\", "

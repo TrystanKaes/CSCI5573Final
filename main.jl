@@ -8,16 +8,14 @@ include("components.jl")
 include("schedulers.jl")
 
 verbose       = false
-print         = true
+print_results = false
 stochasticish = true
 
 tasks        = nothing
-IOBuses      = nothing
-IOBusesQueue = nothing
+comms        = nothing
 PROCESSORS   = nothing
 ReadyQueue   = nothing
 Terminated   = nothing
-IOQueue      = nothing
 
 COMPLETE     = false
 
@@ -41,11 +39,7 @@ function main(dag_file="")
 
     @simulation begin
         # current_trace!(true)
-        global tasks = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
-
-        global IOBuses = Resource(N_BUSSES, "IOBus")
-        global IOBusesQueue = []
-        global IOQueue = FifoQueue{Int64}()
+        global tasks, comms = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
 
         global ReadyQueue = FifoQueue{Int64}()
 
@@ -65,11 +59,9 @@ function main(dag_file="")
         # @schedule at 0 FCFSScheduler()
         @schedule at 0 HEFTScheduler()
 
-        @schedule at 0 IOHandler()
-
         start_simulation()
 
-        if !print
+        if !print_results
             return
         end
 
@@ -97,31 +89,6 @@ function main(dag_file="")
             )
         end
 
-        if !isdir("$(RUN_PATH)/IO")
-            mkdir("$(RUN_PATH)/IO")
-        end
-
-        write_to_CSV(
-            IOBuses.available,
-            "$(RUN_PATH)/IO/BusAvailabilityStatistics.csv",
-        )
-        plot_history(
-            IOBuses.wait,
-            file = "$(RUN_PATH)/IO/BusWait.png",
-            title = "IO Bus Wait History",
-        )
-
-        plot_history(
-            IOBuses.allocated,
-            file = "$(RUN_PATH)/IO/QueueAllocationHistory.png",
-            title = "IO Bus Allocation History",
-        )
-        plot_history(
-            IOQueue.n,
-            file = "$(RUN_PATH)/IO/QueueHistory.png",
-            title = "IO Queue History",
-        )
-
         write_to_CSV(
             ReadyQueue.n,
             "$(RUN_PATH)/ReadyQueueStatistics.csv",
@@ -131,7 +98,6 @@ function main(dag_file="")
             file = "$(RUN_PATH)/ReadyQueue.png",
             title = "Ready Queue History",
         )
-
     end
 end
 

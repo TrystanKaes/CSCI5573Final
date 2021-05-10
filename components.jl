@@ -54,84 +54,13 @@ end
 
 # ----------------------------- End Processor -----------------------------
 
-# ----------------------------- Begin Comms -----------------------------
-@process IOHandler() begin
-    while(true)
-        if !isempty(IOQueue)
-            ID = dequeue!(IOQueue)
-            @schedule now Sender(ID, COMM_TIMEOUT)
-        end
-
-        work(CLOCK_CYCLE)
-    end
-end
-
-@process Sender(ID::Int64, timeout::Int64) begin
-    process_store!(current_process(), :process_task, ID)
-    process_store!(current_process(), :connected, false)
-
-    local this_task = tasks[ID]
-
-    if isDone(this_task)
-        push!(Terminated, this_task.ID)
-        return nothing
-    else
-        io_request(current_process(), IOBuses)
-        for _ in 1:timeout
-            if process_store(current_process(), :connected)
-                if verbose
-                    println("I am sending...", this_task)
-                end
-                working!(this_task, this_task.Cost)
-                work(this_task.Cost)
-                break
-            end
-
-            wait(CLOCK_CYCLE)
-        end
-        io_release(current_process(), IOBuses)
-    end
-
-    enqueue!(ReadyQueue, this_task.ID)
-    return nothing
-end
-
-@process Reciever(ID::Int64, time::Int64) begin
-    process_store!(current_process(), :process_task, ID)
-    local this_task = tasks[ID]
-
-    if verbose
-        println("I am recieving...", this_task)
-    end
-
-    working!(this_task, time)
-    work(time)
-    enqueue!(ReadyQueue, this_task.ID)
-end
-
-function IncomingCommunication(receiver::Int64)
-
-    for process in IOBusesQueue
-        io_task = tasks[process_store(process, :process_task)]
-
-        for child in io_task.Children
-            if child === receiver
-                return process
-            end
-        end
-    end
-
-    return nothing
-end
-# ----------------------------- End Comms -----------------------------
-
 # ----------------------------- Begin Routing -----------------------------
 
 @process Enqueuer() begin
     local Incoming::Vector{Int64} = []
 
-    for i in 1:length(unique(collect(keys(tasks))))
-        push!(Incoming, i-1)
+    for i in unique(collect(keys(tasks)))
+        push!(Incoming, i)
     end
 
     active_tasks = []
@@ -163,23 +92,6 @@ end
 
         wait(CLOCK_CYCLE)
 
-        for ID in copy(active_tasks)
-            for child in tasks[ID].Children
-                only_comms = true
-                for dep in copy(tasks[child].Dependencies)
-                    if tasks[dep].Type !== :TRANSFER
-                        only_comms = false
-                    end
-                end
-
-                if only_comms
-                    push!(launch, child)
-                end
-            end
-        end
-
-        wait(CLOCK_CYCLE)
-
         filter!(e->e in Incoming, launch)
 
         if verbose
@@ -201,7 +113,6 @@ end
         if verbose
             println("Active Tasks", active_tasks)
             println("Ready Queue", ReadyQueue.data)
-            println("IO Bus", IOBusesQueue)
         end
 
         if length(Incoming) === 0 & length(active_tasks) === 1 & length(Terminated) === 0
@@ -212,7 +123,7 @@ end
     end
 end
 
-@process Dispatcher(ID::Int64, processor::Int64, time::Int64) begin
+@process Dispatcher(ID::Int64, processor::Int64, comm_time::Int64, process_time::Int64) begin
     process_store!(current_process(), :process_task, ID)
     local this_task = tasks[ID]
 
@@ -228,38 +139,8 @@ end
         stop_simulation()
     end
 
-    if this_task.Type === :TRANSFER
-        SendToProcessor(PROCESSORS[processor], ID, COMM_INTERRUPT_CYCLES)
-        if isDone(this_task)
-            push!(Terminated, this_task.ID)
-        else
-            enqueue!(IOQueue, this_task.ID)
-        end
-    end
-
     if this_task.Type === :COMPUTATION
-        io_process = IncomingCommunication(this_task.ID)
-
-        if io_process !== nothing
-            comm_task = tasks[process_store(io_process, :process_task)]
-            comm_time = comm_task.Cost
-            notice = interrupt(io_process)
-
-            remove_dependency!(this_task, comm_task.ID)
-
-            process_store!(io_process, :connected, true)
-            resume(io_process, Notice(current_time(), io_process))
-
-            @schedule now Reciever(ID, Int64(round(comm_time)))
-            return
-        end
-
-        if length(this_task.Dependencies) > 0
-            enqueue!(ReadyQueue, this_task.ID)
-            return
-        end
-
-        SendToProcessor(PROCESSORS[processor], ID, time)
+        SendToProcessor(PROCESSORS[processor], ID, process_time+comm_time)
     end
 end
 # ----------------------------- End Routing -----------------------------

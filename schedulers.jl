@@ -1,3 +1,6 @@
+# CSCI5573Final/schedulers.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
 
 # ----------------------------- Begin FCFS -----------------------------
 @process FCFSScheduler() begin

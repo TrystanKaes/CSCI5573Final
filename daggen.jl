@@ -1,3 +1,7 @@
+# CSCI5573Final/daggen.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
+
 # This is all a bit ugly. Lets just not talk about it.
 function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()

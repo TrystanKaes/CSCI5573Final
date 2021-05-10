@@ -1,3 +1,7 @@
+# CSCI5573Final/config.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
+
 RUN_NAME="SimulationResults"
 MAX_TASKS=40
 N_BUSSES = 10 # Number of communication buffers

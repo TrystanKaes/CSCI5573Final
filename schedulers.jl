@@ -79,7 +79,7 @@ end
     while(true)
         readyList = []
 
-        max_rank = 0.0
+        max_rank = -Inf
         min_EFT = Inf
         pj = -1
         ni = -1

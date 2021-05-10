@@ -8,10 +8,11 @@ include("components.jl")
 include("schedulers.jl")
 
 verbose       = false
-print         = true
+print         = false
 stochasticish = true
 
 tasks        = nothing
+comms        = nothing
 IOBuses      = nothing
 IOBusesQueue = nothing
 PROCESSORS   = nothing
@@ -41,7 +42,7 @@ function main(dag_file="")
 
     @simulation begin
         # current_trace!(true)
-        global tasks = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
+        global tasks, comms = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
         global IOBusesQueue = []
@@ -62,10 +63,8 @@ function main(dag_file="")
 
         @schedule now Enqueuer()
 
-        # @schedule at 0 FCFSScheduler()
-        @schedule at 0 HEFTScheduler()
-
-        @schedule at 0 IOHandler()
+        @schedule at 0 FCFSScheduler()
+        # @schedule at 0 HEFTScheduler()
 
         start_simulation()
 

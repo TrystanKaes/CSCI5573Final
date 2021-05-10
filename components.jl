@@ -214,7 +214,7 @@ end
 
     if this_task.Type === :END
         if verbose
-            println("End Queued at $current_time()")
+            println("End Queued at $(current_time())")
         end
         global COMPLETE
         while(!COMPLETE)

@@ -56,7 +56,7 @@ function ParseTask(cfg::String, final=false)
     Children = Vector{Int64}()
     Type = Symbol(config[4])
 
-    Cost = parse(Float64, config[5])/1_000_000_000 |> round |> Int64
+    Cost = Symbol(config[5]) === :nan ? 100 : parse(Float64, config[5])/1_000_000_000 |> round |> Int64
     Cost = Cost > 0 ? Cost : 1
 
     Complexity = parse(Float64, config[6])

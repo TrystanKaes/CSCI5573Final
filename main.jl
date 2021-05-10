@@ -9,7 +9,7 @@ include("schedulers.jl")
 
 verbose       = false
 print         = true
-stochasticish = false
+stochasticish = true
 
 tasks        = nothing
 IOBuses      = nothing
@@ -140,4 +140,4 @@ if !isdir(SIM_RUN)
 end
 
 println("Starting simulation")
-main("input_dag")
+main()

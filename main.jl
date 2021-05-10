@@ -13,12 +13,9 @@ stochasticish = true
 
 tasks        = nothing
 comms        = nothing
-IOBuses      = nothing
-IOBusesQueue = nothing
 PROCESSORS   = nothing
 ReadyQueue   = nothing
 Terminated   = nothing
-IOQueue      = nothing
 
 COMPLETE     = false
 
@@ -43,10 +40,6 @@ function main(dag_file="")
     @simulation begin
         # current_trace!(true)
         global tasks, comms = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
-
-        global IOBuses = Resource(N_BUSSES, "IOBus")
-        global IOBusesQueue = []
-        global IOQueue = FifoQueue{Int64}()
 
         global ReadyQueue = FifoQueue{Int64}()
 
@@ -95,31 +88,6 @@ function main(dag_file="")
                 title = "Processor $i Allocation History",
             )
         end
-
-        if !isdir("$(RUN_PATH)/IO")
-            mkdir("$(RUN_PATH)/IO")
-        end
-
-        write_to_CSV(
-            IOBuses.available,
-            "$(RUN_PATH)/IO/BusAvailabilityStatistics.csv",
-        )
-        plot_history(
-            IOBuses.wait,
-            file = "$(RUN_PATH)/IO/BusWait.png",
-            title = "IO Bus Wait History",
-        )
-
-        plot_history(
-            IOBuses.allocated,
-            file = "$(RUN_PATH)/IO/QueueAllocationHistory.png",
-            title = "IO Bus Allocation History",
-        )
-        plot_history(
-            IOQueue.n,
-            file = "$(RUN_PATH)/IO/QueueHistory.png",
-            title = "IO Queue History",
-        )
 
         write_to_CSV(
             ReadyQueue.n,

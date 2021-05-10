@@ -58,8 +58,9 @@ function main(dag_file="")
         @schedule now Enqueuer()
 
         # @schedule at 0 FCFSScheduler()
-        @schedule at 0 HEFTScheduler()
+        # @schedule at 0 HEFTScheduler()
         # @schedule at 0 PEFTScheduler()
+        @schedule at 0 List_Scheduler()
 
         start_simulation()
 

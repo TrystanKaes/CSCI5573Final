@@ -3,7 +3,7 @@
 # full license information.
 
 SIM_RUN="SimulationResults"
-MAX_TASKS=500
+MAX_TASKS=300
 N_BUSSES = 10 # Number of communication buffers
 CLOCK_CYCLE = 1
 COMM_TIMEOUT = 100

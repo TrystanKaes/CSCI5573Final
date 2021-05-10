@@ -49,9 +49,9 @@ function EST_List_Scheduler(task, processor, aft)
     available = current_time() + TotalWork(PROCESSORS[processor])
     max_pred = 0
 
-    for parent in parentsof(ni, tasks)
-        cij = comms[Edge(ni, parent)]
-        if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
+    for parent in parentsof(task, tasks)
+        cij = comms[Edge(task, parent)]
+        if parent in PROCESSORS[processor].queue || parent === PROCESSORS[processor].task
             cij = 0
         end
         new_pred = aft[parent] + cij

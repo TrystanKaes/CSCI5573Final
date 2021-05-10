@@ -65,12 +65,7 @@ function WIJ_HEFT(task, processor)
     if tasks[task].Type === :TRANSFER
         return tasks[task].Cost
     else
-        # Introduce a little randomness. . .
-        if 1-rand() > 0.5
-            return PROCESSORS[processor].Multiplier * tasks[task].Cost
-        else
-            return PROCESSORS[processor].Multiplier * tasks[task].Cost
-        end
+        return PROCESSORS[processor].Multiplier * tasks[task].Cost
     end
 end
 

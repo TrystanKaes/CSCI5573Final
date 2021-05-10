@@ -8,7 +8,7 @@ include("components.jl")
 include("schedulers.jl")
 
 verbose       = false
-print         = false
+print_results = false
 stochasticish = true
 
 tasks        = nothing
@@ -56,12 +56,12 @@ function main(dag_file="")
 
         @schedule now Enqueuer()
 
-        @schedule at 0 FCFSScheduler()
-        # @schedule at 0 HEFTScheduler()
+        # @schedule at 0 FCFSScheduler()
+        @schedule at 0 HEFTScheduler()
 
         start_simulation()
 
-        if !print
+        if !print_results
             return
         end
 
@@ -98,7 +98,6 @@ function main(dag_file="")
             file = "$(RUN_PATH)/ReadyQueue.png",
             title = "Ready Queue History",
         )
-
     end
 end
 

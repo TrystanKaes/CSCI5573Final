@@ -86,7 +86,7 @@ function daggen(;
     daggen_clean()
 
     # This processes the IOBuffer as a String array
-    tasklist = buffer |> take! |> String |> l->split(l,"\n") |> l->deleteat!(l,[1,2,length(l)])
+    tasklist = buffer |> take! |> String |> l->split(l,"\n") |> l->deleteat!(l,[1,2,length(l)-1])
 
     num_task = tasklist[1] |> c->split(c, " ") |> n->n[2] |> i->parse(Int, i)
 
@@ -95,11 +95,11 @@ function daggen(;
     return String.(tasklist), num_task
 end
 
-function pregen_daggen(file)
-    dag = readlines(file)
+function read_daggen(file)
+    config = readlines(file)
 
     # This processes the IOBuffer as a String array
-    tasklist = dag |> l->deleteat!(l,[1,2,length(l)])
+    tasklist = config |> l->deleteat!(l,[1,2])
 
     num_task = tasklist[1] |> c->split(c, " ") |> n->n[2] |> i->parse(Int, i)
 

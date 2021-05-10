@@ -1,4 +1,4 @@
-RUN_NAME="Cody"
+RUN_NAME="SimulationResults"
 MAX_TASKS=40
 N_BUSSES = 10 # Number of communication buffers
 CLOCK_CYCLE = 1

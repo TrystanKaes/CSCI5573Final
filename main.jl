@@ -7,19 +7,28 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
-verbose = false
-COMPLETE = false
+verbose       = false
+stochasticish = false
 
-tasks = nothing
-IOBuses = nothing
+tasks        = nothing
+IOBuses      = nothing
 IOBusesQueue = nothing
 PROCESSORS = nothing
-ReadyQueue = nothing
-Terminated = nothing
-IOQueue = nothing
+PROCESSORS   = nothing
+ReadyQueue   = nothing
+Terminated   = nothing
+IOQueue      = nothing
 
-function main()
-    tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
+COMPLETE     = false
+
+function main(dagfile="")
+    tasklist, num_tasks = nothing, nothing
+
+    if stochasticish
+        tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
+    else
+        tasklist, num_tasks = read_daggen(dagfile)
+    end
 
     @simulation begin
         if verbose
@@ -102,4 +111,6 @@ if !isdir(RUN_NAME)
     mkdir(RUN_NAME)
 end
 
-main()
+main("input_dag")
+
+# task_list, num = read_daggen("./dag_thing")

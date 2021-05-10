@@ -19,7 +19,7 @@
 end
 # ----------------------------- End FCFS -----------------------------
 
-# ----------------------------- Begin HEFT -----------------------------
+# ----------------------------- Begin fakeHeft -----------------------------
 function Rank_HEFT(task_graph)
     ranks = Dict{Int64,Float64}()
 
@@ -65,6 +65,7 @@ function WIJ_HEFT(task, processor)
     if tasks[task].Type === :TRANSFER
         return tasks[task].Cost
     else
+        # Check whether this process takes advantage of the speedup
         return PROCESSORS[processor].Multiplier * tasks[task].Cost
     end
 end
@@ -137,7 +138,7 @@ end
         end
     end
 end
-# ----------------------------- End HEFT -----------------------------
+# ----------------------------- End fakeHeft -----------------------------
 
 
 # ----------------------------- Begin PEFT -----------------------------

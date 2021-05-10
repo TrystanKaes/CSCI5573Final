@@ -10,8 +10,8 @@ COMM_TIMEOUT = 100
 COMM_INTERRUPT_CYCLES = 10 # How many clock cycles to handle IO queueing
 PROCESSOR_POWERS = [
     # 1.0,
+    0.51,
     0.5,
-    0.4,
     # 0.3,
     # 0.2,
 ]

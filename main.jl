@@ -140,4 +140,5 @@ if !isdir(SIM_RUN)
 end
 
 println("Starting simulation")
+
 main()

@@ -135,7 +135,9 @@ end
         while(!COMPLETE)
             wait(1)
         end
-        println("Simulation finished in $(current_time())")
+
+        global FINISH_TIME = "$(current_time())"
+        println("Simulation finished in $(FINISH_TIME)")
         stop_simulation()
     end
 

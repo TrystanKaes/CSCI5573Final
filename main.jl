@@ -7,9 +7,9 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
-verbose       = false
-print_results = false
-stochasticish = true
+verbose        = false
+output_results = true
+stochasticish  = true
 
 tasks        = nothing
 comms        = nothing
@@ -18,6 +18,7 @@ ReadyQueue   = nothing
 Terminated   = nothing
 
 COMPLETE     = false
+FINISH_TIME  = ""
 
 function main(dag_file="")
     RUN_NAME = ""
@@ -58,47 +59,15 @@ function main(dag_file="")
 
         # @schedule at 0 FCFSScheduler()
         @schedule at 0 HEFTScheduler()
+        # @schedule at 0 PEFTScheduler()
 
         start_simulation()
 
-        if !print_results
-            return
+        if output_results
+            print_results(RUN_PATH)
         end
-
-        for i = 1:length(PROCESSORS)
-            if !isdir("$(RUN_PATH)/Processor$(i)")
-                mkdir("$(RUN_PATH)/Processor$(i)")
-            end
-            write_to_CSV(
-                PROCESSORS[i].resource.wait,
-                "$(RUN_PATH)/Processor$(i)/waitStatistics.csv",
-            )
-            write_to_CSV(
-                PROCESSORS[i].resource.queue_length,
-                "$(RUN_PATH)/Processor$(i)/QueueLengthStatistics.csv",
-            )
-            plot_history(
-                PROCESSORS[i].resource.wait,
-                file = "$(RUN_PATH)/Processor$(i)/WaitHistory.png",
-                title = "Processor $i Wait History",
-            )
-            plot_history(
-                PROCESSORS[i].resource.allocated,
-                file = "$(RUN_PATH)/Processor$(i)/AllocationHistory.png",
-                title = "Processor $i Allocation History",
-            )
-        end
-
-        write_to_CSV(
-            ReadyQueue.n,
-            "$(RUN_PATH)/ReadyQueueStatistics.csv",
-        )
-        plot_history(
-            ReadyQueue.n,
-            file = "$(RUN_PATH)/ReadyQueue.png",
-            title = "Ready Queue History",
-        )
     end
+    return RUN_PATH
 end
 
 if !isdir(SIM_RUN)
@@ -106,4 +75,10 @@ if !isdir(SIM_RUN)
 end
 
 println("Starting simulation")
-main()
+run_path = main("test.dag")
+
+open("$(run_path)/runtimes.txt", "a") do file
+    write(file, "$(FINISH_TIME)\n")
+end
+
+return

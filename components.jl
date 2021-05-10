@@ -224,6 +224,7 @@ end
         while(!COMPLETE)
             wait(1)
         end
+        println("Simulation finished in $(current_time())")
         stop_simulation()
     end
 

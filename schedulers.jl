@@ -61,7 +61,7 @@ function EST_HEFT(task, processor, aft)
     return max(available, MaxParentAFTPlusCost)
 end
 
-function WIJ_HEFT(processor, task)
+function WIJ_HEFT(task, processor)
     if tasks[task].Type === :TRANSFER
         return tasks[task].Cost
     else
@@ -91,63 +91,50 @@ end
 
         while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
             ID = dequeue!(ReadyQueue)
-            print(ID)
             push!(readyList, ID)
         end
 
-        println.(readyList)
-
-        # Max Rank Task
-        for task in readyList
-            if rank[task] > max_rank
-                ni = task
-            end
-        end
-
-        # Minimum EFT
-        for j in 1:length(PROCESSORS)
-
-            if EST_HEFT(ni, j, aft) + WIJ_HEFT(j, ni) < min_EFT
-                pj = j
-            end
-        end
-
-        wik = minimum(map(k->WIJ_HEFT(k, ni), PROCESSORS)...)
-
-        if pj < wik
-            # Schedule this task to start on that processor
-            @schedule now Dispatcher(ni, pj, tasks[ni].Cost)
-
-            filter!(i->i!==ni, readyList)
+        while(length(readyList) > 0)
+            # Max Rank Task
             for task in readyList
-                enqueue!(ReadyQueue, task)
+                if rank[task] > max_rank
+                    ni = task
+                end
             end
-        else
-            pk = filter(k->WIJ_HEFT(k, ni) === wik, PROCESSORS)
 
-            EFT(t, p) = EST_HEFT(t, p, aft) + WIJ_HEFT(t, p)
+            # Minimum EFT
+            for j in 1:length(PROCESSORS)
+                if EST_HEFT(ni, j, aft) + WIJ_HEFT(ni, j) < min_EFT
+                    pj = j
+                end
+            end
 
-            wa_numerator = EFT(ni, pj) - EFT(ni, pk)
-            wa_denominator = EFT(ni, pj) / EFT(ni, pk)
+            wik = min(map(k->WIJ_HEFT(ni, k), 1:length(PROCESSORS))...)
 
-            weight_abstract = abs(wa_numerator/wa_denominator)
-            weight_ni = WIJ_HEFT(pj, ni) / tasks[ni].Cost
-
-            cross_threshold = abs(weight_ni/weight_abstract)
-
-            if cross_threshold <= 1-rand()
+            if WIJ_HEFT(ni, pj) <= wik
+                # Schedule this task to start on that processor
                 @schedule now Dispatcher(ni, pj, tasks[ni].Cost)
             else
-                @schedule now Dispatcher(ni, pk, tasks[ni].Cost)
-            end
+                pk = filter(k->WIJ_HEFT(ni, k) === wik, 1:length(PROCESSORS))[begin]
+                EFT(t, p) = EST_HEFT(t, p, aft) + WIJ_HEFT(t, p)
 
+                wa_numerator = EFT(ni, pj) - EFT(ni, pk)
+                wa_denominator = EFT(ni, pj) / EFT(ni, pk)
+
+                weight_abstract = abs(wa_numerator/wa_denominator)
+                weight_ni = WIJ_HEFT(ni, pj) / tasks[ni].Cost
+
+                cross_threshold = abs(weight_ni/weight_abstract)
+
+                if cross_threshold <= 1-rand()
+                    @schedule now Dispatcher(ni, pj, tasks[ni].Cost)
+                else
+                    @schedule now Dispatcher(ni, pk, tasks[ni].Cost)
+                end
+            end
             filter!(i->i!==ni, readyList)
-            for task in readyList
-                enqueue!(ReadyQueue, task)
-            end
+            work(CLOCK_CYCLE)
         end
-
-        work(CLOCK_CYCLE)
     end
 end
 # ----------------------------- End HEFT -----------------------------

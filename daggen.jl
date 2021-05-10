@@ -86,7 +86,7 @@ function daggen(;
     daggen_init()
 
     buffer = IOBuffer()
-    ps = run(pipeline(`$(command)`, stdout=buffer, stderr=err); wait=true)
+    ps = run(pipeline(`$(command)`, stdout=buffer, stderr=err), wait=true)
 
     daggen_clean()
 

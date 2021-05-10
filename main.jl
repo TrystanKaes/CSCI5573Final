@@ -7,7 +7,7 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
-verbose       = true
+verbose       = false
 print         = false
 stochasticish = true
 
@@ -31,7 +31,7 @@ function main(dagfile="")
     end
 
     @simulation begin
-        current_trace!(true)
+        # current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
@@ -114,4 +114,5 @@ if !isdir(RUN_NAME)
     mkdir(RUN_NAME)
 end
 
-main("z_input_dag")
+println("Starting simulation")
+main()

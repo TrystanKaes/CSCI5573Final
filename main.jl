@@ -8,8 +8,8 @@ include("components.jl")
 include("schedulers.jl")
 
 verbose        = false
-output_results = true
-stochasticish  = true
+output_results = false
+stochasticish  = false
 
 tasks        = nothing
 comms        = nothing
@@ -20,7 +20,7 @@ Terminated   = nothing
 COMPLETE     = false
 FINISH_TIME  = ""
 
-function main(dag_file="")
+function run_sim(dag_file="")
     RUN_NAME = ""
     tasklist, num_tasks = nothing, nothing
 
@@ -28,8 +28,8 @@ function main(dag_file="")
         RUN_NAME = "RandomDag$(rand(0:10000))"
         tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
     else
-        RUN_NAME = dag_file
-        tasklist, num_tasks = read_daggen(dag_file)
+        RUN_NAME = replace(dag_file, "."=>"")
+        tasklist, num_tasks = read_daggen("DAGS/"*dag_file)
     end
 
     RUN_PATH = SIM_RUN * "/" * RUN_NAME
@@ -57,10 +57,10 @@ function main(dag_file="")
 
         @schedule now Enqueuer()
 
-        # @schedule at 0 FCFSScheduler()
-        # @schedule at 0 HEFTScheduler()
-        # @schedule at 0 PEFTScheduler()
-        @schedule at 0 List_Scheduler()
+        # @schedule at 0 FCFSScheduler(RUN_PATH)
+        # @schedule at 0 HEFTScheduler(RUN_PATH)
+        # @schedule at 0 PEFTScheduler(RUN_PATH)
+        @schedule at 0 List_Scheduler(RUN_PATH)
 
         start_simulation()
 
@@ -71,15 +71,28 @@ function main(dag_file="")
     return RUN_PATH
 end
 
-if !isdir(SIM_RUN)
-    mkdir(SIM_RUN)
+
+
+function main()
+    if !isdir(SIM_RUN)
+        mkdir(SIM_RUN)
+    end
+
+    println("Starting simulation")
+    for dagfile in DAGS
+        for i in 1:TRIALS
+            if i === TRIALS
+                global output_results = true
+            end
+            run_path = run_sim(dagfile)
+            open("$(run_path)/runtimes.txt", "a") do file
+                write(file, "$(FINISH_TIME)\n")
+            end
+        end
+        global output_results = false
+    end
+
+    return
 end
 
-println("Starting simulation")
-run_path = main("test.dag")
-
-open("$(run_path)/runtimes.txt", "a") do file
-    write(file, "$(FINISH_TIME)\n")
-end
-
-return
+main()

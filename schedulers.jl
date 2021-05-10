@@ -29,10 +29,15 @@ function AFT_List_Scheduler(ranks, processors)
     AFT = Dict{Int64,Float64}()
 
     for (ID, rank) in ranks
-        ranks[ID] = max(((p->p.Multiplier*rank).(processors))...) |> round
+        comm_cost = 0
+        if !isempty(tasks[ID].Children)
+            comm_cost = sum(l->comms[Edge(ID,l)], tasks[ID].Children)
+        end
+
+        AFT[ID] = max(((p->p.Multiplier*rank).(processors))...) + comm_cost |> round
     end
 
-    return ranks
+    return AFT
 end
 
 function EST_List_Scheduler(task, processor, aft)
@@ -67,10 +72,14 @@ function WIJ_List_Scheduler(task, processor)
     return PROCESSORS[processor].Multiplier * tasks[task].Cost
 end
 
-@process List_Scheduler() begin
+@process List_Scheduler(RUN_PATH) begin
     rank = Rank_List_Scheduler(tasks)
     aft = AFT_List_Scheduler(rank, PROCESSORS)
     makespan = max(collect(Int64, keys(aft))...)
+
+    open("$(RUN_PATH)/runtimes.txt", "a") do file
+        write(file, "$(aft[0]),")
+    end
 
     global PROCESSORS
 
@@ -211,10 +220,13 @@ function WIJ_heft(ni, pj)
     return PROCESSORS[pj].Multiplier * tasks[ni].Cost
 end
 
-@process HEFTScheduler() begin
+@process HEFTScheduler(RUN_PATH) begin
     rankU = UpwardRank(tasks, comms)
     aft = AFT_heft(rankU, PROCESSORS)
 
+    open("$(RUN_PATH)/runtimes.txt", "a") do file
+        write(file, "$(aft[0]),")
+    end
 
     while(true)
         if isempty(ReadyQueue)
@@ -361,10 +373,14 @@ function EST_peft(ni, pj, aft)
 end
 
 
-@process PEFTScheduler() begin
+@process PEFTScheduler(RUN_PATH) begin
     oct = OCT(tasks)
     rank_oct = RankOct(oct, tasks)
     aft = AFT_peft(rank_oct, PROCESSORS)
+
+    open("$(RUN_PATH)/runtimes.txt", "a") do file
+        write(file, "$(aft[0]),")
+    end
 
     while(true)
         if isempty(ReadyQueue)
@@ -417,6 +433,11 @@ end
 
 # ----------------------------- Begin FCFS -----------------------------
 @process FCFSScheduler() begin
+
+    open("$(RUN_PATH)/runtimes.txt", "a") do file
+        write(file, "$(aft[0]),")
+    end
+
     processor = 0
     while(true)
         if !isempty(ReadyQueue)

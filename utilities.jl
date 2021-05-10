@@ -21,3 +21,11 @@ function parentsof(ID, tasks)
     end
     return parents
 end
+
+function write_to_CSV(var::SimLynx.Variable, file="Statistics.csv")
+    stats = var.stats
+    open(file, "w") do f
+        write(f, "min, max, n, mean, variance, stddev\n")
+        write(f, "$(stats.min), $(stats.max), $(stats.n), $(stats.mean), $(stats.variance), $(stats.stddev)\n")
+    end
+end

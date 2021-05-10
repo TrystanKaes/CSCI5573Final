@@ -65,7 +65,12 @@ function WIJ_HEFT(task, processor)
     if tasks[task].Type === :TRANSFER
         return tasks[task].Cost
     else
-        return PROCESSORS[processor].Multiplier * tasks[task].Cost
+        # Introduce a little randomness. . .
+        if 1-rand() > 0.5
+            return PROCESSORS[processor].Multiplier * tasks[task].Cost
+        else
+            return PROCESSORS[processor].Multiplier * tasks[task].Cost
+        end
     end
 end
 
@@ -79,7 +84,7 @@ end
     while(true)
         readyList = []
 
-        max_rank = 0.0
+        max_rank = -Inf
         min_EFT = Inf
         pj = -1
         ni = -1

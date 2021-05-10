@@ -95,7 +95,7 @@ end
             push!(readyList, ID)
         end
 
-        println(readyList)
+        println.(readyList)
 
         # Max Rank Task
         for task in readyList

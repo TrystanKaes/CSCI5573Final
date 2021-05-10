@@ -5,6 +5,7 @@
 # This is all a bit ugly. Lets just not talk about it.
 function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()
+
     for task in tasklist[1:end-1]
         new_task = ParseTask(task)
         dag[new_task.ID] = new_task
@@ -90,7 +91,7 @@ function daggen(;
     daggen_clean()
 
     # This processes the IOBuffer as a String array
-    tasklist = buffer |> take! |> String |> l->split(l,"\n") |> l->deleteat!(l,[1,2,length(l)-1])
+    tasklist = buffer |> take! |> String |> l->split(l,"\n") |> l->deleteat!(l,[1,2,length(l)])
 
     num_task = tasklist[1] |> c->split(c, " ") |> n->n[2] |> i->parse(Int, i)
 

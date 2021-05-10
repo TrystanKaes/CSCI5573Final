@@ -13,7 +13,6 @@ stochasticish = false
 tasks        = nothing
 IOBuses      = nothing
 IOBusesQueue = nothing
-PROCESSORS = nothing
 PROCESSORS   = nothing
 ReadyQueue   = nothing
 Terminated   = nothing

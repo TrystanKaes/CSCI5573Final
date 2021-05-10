@@ -1,3 +1,7 @@
+# CSCI5573Final/components.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
+
 # ----------------------------- Begin Processor -----------------------------
 mutable struct Processor
     task::Union{_Task, Nothing}
@@ -14,7 +18,7 @@ function TotalWork(processor::Processor)
     for task in processor.queue
         total = total + tasks[task].Cost
     end
-    return total
+    return total * processor.Multiplier |> round |> Int64
 end
 
 function SendToProcessor(processor::Processor, ID::Int64, time::Int64)
@@ -214,12 +218,13 @@ end
 
     if this_task.Type === :END
         if verbose
-            println("End Queued at $current_time()")
+            println("End Queued at $(current_time())")
         end
         global COMPLETE
         while(!COMPLETE)
             wait(1)
         end
+        println("Simulation finished in $(current_time())")
         stop_simulation()
     end
 

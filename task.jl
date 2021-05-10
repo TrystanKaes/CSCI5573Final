@@ -2,24 +2,6 @@
 # Licensed under the MIT License. See LICENSE.md file in the project root for
 # full license information.
 
-"""
-_Task
-
-Represents Stuff
-
-# Fields
-- `ID::Int64`: The unique ID of this Task.
-- `work::Array{Pair(Symbol,Int64)}`: The (resource, work) pairs that makes up this tasks needs.
-- `alpha::Float64`: The alpha parameter for Amdahl law calculation
-- `complexity::Symbol`: The complexity of this Task (e.g :LOG_N, :N, :N_2)
-- `comm::Symbol`: Direction of communication :send, :recieve, or :none
-- `comm_target::Int64`: Identity of the process that needs to h
-- `communication_cost::Float64`: The cost of communicating
-- `data::Int64`: The amount of data this task needs to transfer
-
-# Methods
-- `val::Type{Any}`: words
-"""
 mutable struct _Task
     ID::Int64
     Children::Vector{Int64}
@@ -56,7 +38,7 @@ function ParseTask(cfg::String, final=false)
     Children = Vector{Int64}()
     Type = Symbol(config[4])
 
-    Cost = parse(Float64, config[5])/1_000_000_000 |> round |> Int64
+    Cost = Symbol(config[5]) === :nan ? 100 : parse(Float64, config[5])/1_000_000_000 |> round |> Int64
     Cost = Cost > 0 ? Cost : 1
 
     Complexity = parse(Float64, config[6])

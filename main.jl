@@ -7,24 +7,31 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
-verbose = false
-COMPLETE = false
+verbose       = false
+print         = false
+stochasticish = true
 
-tasks = nothing
-IOBuses = nothing
+tasks        = nothing
+IOBuses      = nothing
 IOBusesQueue = nothing
-PROCESSORS = nothing
-ReadyQueue = nothing
-Terminated = nothing
-IOQueue = nothing
+PROCESSORS   = nothing
+ReadyQueue   = nothing
+Terminated   = nothing
+IOQueue      = nothing
 
-function main()
-    tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
+COMPLETE     = false
+
+function main(dagfile="")
+    tasklist, num_tasks = nothing, nothing
+
+    if stochasticish
+        tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
+    else
+        tasklist, num_tasks = read_daggen(dagfile)
+    end
 
     @simulation begin
-        if verbose
-            current_trace!(true)
-        end
+        # current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
@@ -46,11 +53,16 @@ function main()
 
         @schedule now Enqueuer()
 
-        @schedule at 0 FCFSScheduler()
+        # @schedule at 0 FCFSScheduler()
+        @schedule at 0 HEFTScheduler()
 
         @schedule at 0 IOHandler()
 
         start_simulation()
+
+        if !print
+            return
+        end
 
         println()
         print_stats(IOBuses.available, title = "IO Bus Availability Statistics")
@@ -102,4 +114,5 @@ if !isdir(RUN_NAME)
     mkdir(RUN_NAME)
 end
 
+println("Starting simulation")
 main()

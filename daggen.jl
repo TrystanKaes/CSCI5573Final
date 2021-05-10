@@ -1,6 +1,11 @@
+# CSCI5573Final/daggen.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
+
 # This is all a bit ugly. Lets just not talk about it.
 function ListToDictDAG(tasklist, dot_file="")
     dag = Dict{Int64,_Task}()
+
     for task in tasklist[1:end-1]
         new_task = ParseTask(task)
         dag[new_task.ID] = new_task
@@ -81,7 +86,7 @@ function daggen(;
     daggen_init()
 
     buffer = IOBuffer()
-    ps = run(pipeline(`$(command)`, stdout=buffer, stderr=err); wait=true)
+    ps = run(pipeline(`$(command)`, stdout=buffer, stderr=err), wait=true)
 
     daggen_clean()
 
@@ -95,11 +100,11 @@ function daggen(;
     return String.(tasklist), num_task
 end
 
-function pregen_daggen(file)
-    dag = readlines(file)
+function read_daggen(file)
+    config = readlines(file)
 
     # This processes the IOBuffer as a String array
-    tasklist = dag |> l->deleteat!(l,[1,2,length(l)])
+    tasklist = config |> l->deleteat!(l,[1,2])
 
     num_task = tasklist[1] |> c->split(c, " ") |> n->n[2] |> i->parse(Int, i)
 

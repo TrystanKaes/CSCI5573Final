@@ -9,7 +9,7 @@ include("schedulers.jl")
 
 verbose       = true
 print         = false
-stochasticish = false
+stochasticish = true
 
 tasks        = nothing
 IOBuses      = nothing
@@ -31,7 +31,7 @@ function main(dagfile="")
     end
 
     @simulation begin
-        # current_trace!(true)
+        current_trace!(true)
         global tasks = ListToDictDAG(tasklist, "$RUN_NAME/dagGraph.dot")
 
         global IOBuses = Resource(N_BUSSES, "IOBus")
@@ -53,7 +53,8 @@ function main(dagfile="")
 
         @schedule now Enqueuer()
 
-        @schedule at 0 FCFSScheduler()
+        # @schedule at 0 FCFSScheduler()
+        @schedule at 0 HEFTScheduler()
 
         @schedule at 0 IOHandler()
 

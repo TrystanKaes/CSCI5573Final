@@ -18,7 +18,7 @@ function TotalWork(processor::Processor)
     for task in processor.queue
         total = total + tasks[task].Cost
     end
-    return total
+    return total * processor.Multiplier |> round |> Int64
 end
 
 function SendToProcessor(processor::Processor, ID::Int64, time::Int64)

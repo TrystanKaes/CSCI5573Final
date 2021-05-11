@@ -2,7 +2,7 @@
 # Licensed under the MIT License. See LICENSE.md file in the project root for
 # full license information.
 
-SIM_RUN="ListScheduler"
+SIM_RUN="FCFS"
 MAX_TASKS=300
 N_BUSSES = 10 # Number of communication buffers
 CLOCK_CYCLE = 1
@@ -28,10 +28,10 @@ DAGS = [
     "3fat0.9100.dag",
     "4fat0.9100.dag",
     "5fat0.9100.dag",
-    # "1300.dag",
-    # "2300.dag",
-    # "3300.dag",
-    # "4300.dag",
-    # "5300.dag",
-    # "6300.dag",
+    "1300.dag",
+    "2300.dag",
+    "3300.dag",
+    "4300.dag",
+    "5300.dag",
+    "6300.dag",
 ]

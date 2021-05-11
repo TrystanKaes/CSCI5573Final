@@ -57,10 +57,10 @@ function run_sim(dag_file="")
 
         @schedule now Enqueuer()
 
-        # @schedule at 0 FCFSScheduler(RUN_PATH)
+        @schedule at 0 FCFSScheduler(RUN_PATH)
         # @schedule at 0 HEFTScheduler(RUN_PATH)
         # @schedule at 0 PEFTScheduler(RUN_PATH)
-        @schedule at 0 List_Scheduler(RUN_PATH)
+        # @schedule at 0 List_Scheduler(RUN_PATH)
 
         start_simulation()
 

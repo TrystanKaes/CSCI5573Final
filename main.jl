@@ -1,3 +1,7 @@
+# CSCI5573Final/main.jl
+# Licensed under the MIT License. See LICENSE.md file in the project root for
+# full license information.
+
 using SimLynx
 
 include("config.jl")
@@ -7,15 +11,16 @@ include("utilities.jl")
 include("components.jl")
 include("schedulers.jl")
 
+debug          = false
 verbose        = false
 output_results = false
 stochasticish  = false
 
-tasks        = nothing
-comms        = nothing
+COMMS        = nothing
+TASKS        = nothing
 PROCESSORS   = nothing
-ReadyQueue   = nothing
-Terminated   = nothing
+READY_QUEUE  = nothing
+TERMINATED   = nothing
 
 COMPLETE     = false
 FINISH_TIME  = ""
@@ -29,7 +34,7 @@ function run_sim(dag_file="")
         tasklist, num_tasks = daggen(num_tasks = MAX_TASKS)
     else
         RUN_NAME = replace(dag_file, "."=>"")
-        tasklist, num_tasks = read_daggen("DAGS/"*dag_file)
+        tasklist, num_tasks = read_daggen("SampleDAGS/"*dag_file)
     end
 
     RUN_PATH = SIM_RUN * "/" * RUN_NAME
@@ -39,12 +44,15 @@ function run_sim(dag_file="")
     end
 
     @simulation begin
-        # current_trace!(true)
-        global tasks, comms = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
+        if debug
+            current_trace!(true)
+        end
 
-        global ReadyQueue = FifoQueue{Int64}()
+        global TASKS, COMMS = ListToDictDAG(tasklist, "$RUN_PATH/dagGraph.dot")
 
-        global Terminated = []
+        global READY_QUEUE = FifoQueue{Int64}()
+
+        global TERMINATED = []
 
         global PROCESSORS = []
 
@@ -57,10 +65,10 @@ function run_sim(dag_file="")
 
         @schedule now Enqueuer()
 
-        @schedule at 0 FCFSScheduler(RUN_PATH)
-        # @schedule at 0 HEFTScheduler(RUN_PATH)
-        # @schedule at 0 PEFTScheduler(RUN_PATH)
-        # @schedule at 0 List_Scheduler(RUN_PATH)
+        @schedule at 0 FCFSScheduler()
+        # @schedule at 0 HEFTScheduler()
+        # @schedule at 0 PEFTScheduler()
+        # @schedule at 0 ProposedScheduler()
 
         start_simulation()
 

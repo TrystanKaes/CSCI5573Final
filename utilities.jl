@@ -46,12 +46,12 @@ function print_results(RUN_PATH)
     end
 
     write_to_CSV(
-        ReadyQueue.n,
-        "$(RUN_PATH)/ReadyQueueStatistics.csv",
+        READY_QUEUE.n,
+        "$(RUN_PATH)/READY_QUEUEStatistics.csv",
     )
     plot_history(
-        ReadyQueue.n,
-        file = "$(RUN_PATH)/ReadyQueue.png",
+        READY_QUEUE.n,
+        file = "$(RUN_PATH)/READY_QUEUE.png",
         title = "Ready Queue History",
     )
 end

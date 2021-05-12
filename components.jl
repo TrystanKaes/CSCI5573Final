@@ -15,8 +15,8 @@ busy(processor::Processor) = length(processor.queue) == 0
 
 function TotalWork(processor::Processor)
     total = 0
-    for task in processor.queue
-        total = total + tasks[task].Cost
+    for ID in processor.queue
+        total = total + TASKS[ID].Cost
     end
     return total * processor.Multiplier |> round |> Int64
 end
@@ -30,7 +30,7 @@ function SendToProcessor(processor::Processor, ID::Int64, time::Int64)
 
         filter!(e->e!==ID, processor.queue)
 
-        processor.task = tasks[ID]
+        processor.task = TASKS[ID]
 
         for i in 1:time
             task_work = Int64(round(1/processor.Multiplier))
@@ -44,9 +44,9 @@ function SendToProcessor(processor::Processor, ID::Int64, time::Int64)
         end
 
         if isDone(processor.task)
-            push!(Terminated, processor.task.ID)
+            push!(TERMINATED, processor.task.ID)
         else
-            enqueue!(ReadyQueue, processor.task.ID)
+            enqueue!(READY_QUEUE, processor.task.ID)
         end
     end
     processor.task = nothing
@@ -59,24 +59,24 @@ end
 @process Enqueuer() begin
     local Incoming::Vector{Int64} = []
 
-    for i in unique(collect(keys(tasks)))
+    for i in unique(collect(keys(TASKS)))
         push!(Incoming, i)
     end
 
     active_tasks = []
 
-    push!(Terminated, 0)
+    push!(TERMINATED, 0)
     filter!(e->e!==0, Incoming)
 
     while(true)
         launch = []
 
         # Clean up finished tasks and enqueue newly ready tasks
-        for ID in copy(Terminated)
-            for child in copy(tasks[ID].Children)
-                remove_dependency!(tasks[child], ID)
+        for ID in copy(TERMINATED)
+            for child in copy(TASKS[ID].Children)
+                remove_dependency!(TASKS[child], ID)
 
-                if length(tasks[child].Dependencies) === 0 && child in Incoming
+                if length(TASKS[child].Dependencies) === 0 && child in Incoming
                     push!(launch, child)
                 end
             end
@@ -86,7 +86,7 @@ end
             end
 
             filter!(e->e!==ID, active_tasks)
-            filter!(e->e!==ID, Terminated)
+            filter!(e->e!==ID, TERMINATED)
             filter!(e->e!==ID, Incoming)
         end
 
@@ -105,17 +105,17 @@ end
             if verbose
                 println("Enqueuing $task")
             end
-            enqueue!(ReadyQueue, task)
+            enqueue!(READY_QUEUE, task)
             filter!(e->e!==task, Incoming)
             push!(active_tasks, task)
         end
 
         if verbose
             println("Active Tasks", active_tasks)
-            println("Ready Queue", ReadyQueue.data)
+            println("Ready Queue", READY_QUEUE.data)
         end
 
-        if length(Incoming) === 0 & length(active_tasks) === 1 & length(Terminated) === 0
+        if length(Incoming) === 0 & length(active_tasks) === 1 & length(TERMINATED) === 0
             global COMPLETE = true
         end
 
@@ -123,9 +123,9 @@ end
     end
 end
 
-@process Dispatcher(ID::Int64, processor::Int64, comm_time::Int64, process_time::Int64) begin
+@process Dispatcher(ID::Int64, processor::Int64, process_time::Int64, comm_time::Int64) begin
     process_store!(current_process(), :process_task, ID)
-    local this_task = tasks[ID]
+    local this_task = TASKS[ID]
 
     if this_task.Type === :END
         if verbose
@@ -146,3 +146,8 @@ end
     end
 end
 # ----------------------------- End Routing -----------------------------
+
+
+# Just a little sneaky fella down here
+# She manages the results destination.
+SCHEDULER = ""

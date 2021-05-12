@@ -2,208 +2,13 @@
 # Licensed under the MIT License. See LICENSE.md file in the project root for
 # full license information.
 
-
-# ----------------------- Begin List Scheduler -----------------------
-function Rank_List_Scheduler(task_graph)
-    ranks = Dict{Int64,Float64}()
-
-    RecursiveRankTask(ID, ranks) = begin
-        task = task_graph[ID]
-
-        rank = 0.0
-        for child in task.Children
-            new_rank = RecursiveRankTask(child, ranks) + comms[Edge(ID, child)]
-            rank = max(new_rank, rank)
-        end
-        # println("Giving rank ", task.Cost + rank, " to task ", ID)
-        ranks[ID] = task.Cost + rank
-        return ranks[ID]
-    end
-
-    RecursiveRankTask(0, ranks)
-
-    return ranks
-end
-
-function AFT_List_Scheduler(ranks, processors)
-    AFT = Dict{Int64,Float64}()
-
-    for (ID, rank) in ranks
-        comm_cost = 0
-        if !isempty(tasks[ID].Children)
-            comm_cost = sum(l->comms[Edge(ID,l)], tasks[ID].Children)
-        end
-
-        AFT[ID] = max(((p->p.Multiplier*rank).(processors))...) + comm_cost |> round
-    end
-
-    return AFT
-end
-
-function EST_List_Scheduler(task, processor, aft)
-    # available = current_time() + TotalWork(PROCESSORS[processor])
-
-    # # Sorry for this line here. It does:
-    # # max{Tavailable(pj), max{AFT(nm)+cost_m,i} for nm in parents(ni)}
-    # # Not sure if that makes it better but... Bam
-    # MaxParentAFTPlusCost = max(0, map(p->max(aft[p] + tasks[p].Cost, task), parentsof(task, tasks))...)
-
-    # return max(available, MaxParentAFTPlusCost)
-
-    # This should probably replace the above thing.
-    available = current_time() + TotalWork(PROCESSORS[processor])
-    max_pred = 0
-
-    for parent in parentsof(task, tasks)
-        cij = comms[Edge(task, parent)]
-        if parent in PROCESSORS[processor].queue || parent === PROCESSORS[processor].task
-            cij = 0
-        end
-        new_pred = aft[parent] + cij
-        if new_pred > max_pred
-            max_pred = new_pred
-        end
-    end
-
-    return max(available, max_pred)
-end
-
-function WIJ_List_Scheduler(task, processor)
-    return PROCESSORS[processor].Multiplier * tasks[task].Cost
-end
-
-@process List_Scheduler(RUN_PATH) begin
-    rank = Rank_List_Scheduler(tasks)
-    aft = AFT_List_Scheduler(rank, PROCESSORS)
-    makespan = max(collect(Int64, keys(aft))...)
-
-    open("$(RUN_PATH)/runtimes.txt", "a") do file
-        write(file, "$(aft[0]),")
-    end
-
-    global PROCESSORS
-
-    while(true)
-        readyList = []
-
-        max_rank = -Inf
-        min_EFT = Inf
-        pj = -1
-        ni = -1
-
-        if isempty(ReadyQueue)
-            wait(CLOCK_CYCLE)
-            continue
-        end
-
-        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
-            ID = dequeue!(ReadyQueue)
-            push!(readyList, ID)
-        end
-
-        while(length(readyList) > 0)
-            # Max Rank Task
-            for task in readyList
-                if rank[task] > max_rank
-                    ni = task
-                end
-            end
-
-            # Minimum EFT
-            for j in 1:length(PROCESSORS)
-                ij_EFT = EST_List_Scheduler(ni, j, aft) + WIJ_List_Scheduler(ni, j)
-                # println("EFT of Task ", ni, " on processor ", j, " is ", ij_EFT)
-                if ij_EFT < min_EFT
-                    min_EFT = ij_EFT
-                    pj = j
-                end
-            end
-
-            wik = min(map(k->WIJ_List_Scheduler(ni, k), 1:length(PROCESSORS))...)
-
-            # comm_cost = 0
-            # if !isempty(tasks[ni].Children)
-            #     comm_cost = sum(l->comms[Edge(ni,l)], tasks[ni].Children)
-            # end
-
-            comm_cost = 0
-            if !isempty(parentsof(ni, tasks))
-                for parent in parentsof(ni, tasks)
-                    if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
-                        cij = 0
-                    else
-                        comm_cost += comms[Edge(ni, parent)]
-                    end
-                end
-            end
-
-            if WIJ_List_Scheduler(ni, pj) <= wik
-                # println("Wij less than wik for task ", ni, " dispatching task ", ni, " to processor ", pj)
-                # Schedule this task to start on that processor
-                @schedule now Dispatcher(ni, pj, comm_cost, tasks[ni].Cost)
-            else
-                # println("Wij NOT less than wik for task ", ni)
-                pk = filter(k->WIJ_List_Scheduler(ni, k) === wik, 1:length(PROCESSORS))[begin]
-                EFT(t, p) = EST_List_Scheduler(t, p, aft) + WIJ_List_Scheduler(t, p)
-
-                wa_numerator = EFT(ni, pj) - EFT(ni, pk)
-                wa_denominator = EFT(ni, pj) / EFT(ni, pk)
-
-                weight_abstract = abs(wa_numerator/wa_denominator)
-                weight_ni = WIJ_List_Scheduler(ni, pj) / tasks[ni].Cost
-                # println("Abstract weight: ", weight_abstract, " and real weight: ", weight_ni)
-                cross_threshold = abs(weight_ni/weight_abstract)
-
-                if cross_threshold <= 1-rand()
-                    # println("Dispatching task ", ni, " to processor ", pj)
-                    @schedule now Dispatcher(ni, pj, comm_cost, tasks[ni].Cost)
-                else
-                    # println("Dispatching task ", ni, " to processor ", pk)
-                    @schedule now Dispatcher(ni, pk, comm_cost, tasks[ni].Cost)
-                end
-            end
-            filter!(i->i!==ni, readyList)
-            work(CLOCK_CYCLE)
-        end
-    end
-end
-# ----------------------- End List Scheduler -------------------------
-
-# ----------------------------- Begin HEFT -----------------------------
-function UpwardRank(task, communication)
-    ranks = Dict{Int64, Int64}()
-
-    RecursiveRankTask(ID, ranks) = begin
-
-        rank = 0.0
-        for child in task[ID].Children
-            new_rank = communication[Edge(ID, child)] + RecursiveRankTask(child, ranks)
-            if new_rank > rank
-                rank = new_rank
-            end
-        end
-        ranks[ID] = task[ID].Cost + rank
-    end
-    RecursiveRankTask(0, ranks)
-    return ranks
-end
-
-function AFT_heft(ranks, processors)
-    aft = Dict{Int64,Float64}()
-
-    for (ID, rank) in ranks # This might be wrong
-        aft[ID] = max(((p->p.Multiplier*rank).(processors))...) |> round
-    end
-
-    return aft
-end
-
-function EST_heft(ni, pj, aft)
+# -------------------- Begin Shared Functions -----------------------------
+function EST(ni, pj, aft)
     available = current_time() + TotalWork(PROCESSORS[pj])
     max_pred = 0
 
-    for parent in parentsof(ni, tasks)
-        cij = comms[Edge(ni, parent)]
+    for parent in parentsof(ni, TASKS)
+        cij = COMMS[Edge(ni, parent)]
         if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
             cij = 0
         end
@@ -216,72 +21,255 @@ function EST_heft(ni, pj, aft)
     return max(available, max_pred)
 end
 
-function WIJ_heft(ni, pj)
-    return PROCESSORS[pj].Multiplier * tasks[ni].Cost
-end
+function AFT(ranks, processors)
+    aft = Dict{Int64,Float64}()
 
-@process HEFTScheduler(RUN_PATH) begin
-    rankU = UpwardRank(tasks, comms)
-    aft = AFT_heft(rankU, PROCESSORS)
+    for (ID, rank) in ranks
+        comm_cost = 0
+        if !isempty(TASKS[ID].Children)
+            comm_cost = sum(l->COMMS[Edge(ID,l)], TASKS[ID].Children)
+        end
 
-    open("$(RUN_PATH)/runtimes.txt", "a") do file
-        write(file, "$(aft[0]),")
+        aft[ID] = max(((p->p.Multiplier*rank).(processors))...) + comm_cost |> round
     end
 
+    return aft
+end
+
+EFT(t, p, aft) = EST(t, p, aft) + WIJ(t, p)
+
+function WIJ(task, processor)
+    return PROCESSORS[processor].Multiplier * TASKS[task].Cost
+end
+
+function CommCost(ni, pj)
+    comm_cost = 0
+    if !isempty(parentsof(ni, TASKS))
+        for parent in parentsof(ni, TASKS)
+            if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
+                cij = 0
+            else
+                comm_cost += COMMS[Edge(ni, parent)]
+            end
+        end
+    end
+    return comm_cost
+end
+
+Cost(ID) = TASKS[ID].Cost
+# ------------------------- End Functions ---------------------------------
+
+# ----------------------- Begin List Scheduler -----------------------
+@process ProposedScheduler() begin
+    global PROCESSORS
+    global SCHEDULER = "ProposedScheduler"
+
+    rank = ProposedRank(TASKS)
+    aft = AFT(rank, PROCESSORS)
+
     while(true)
-        if isempty(ReadyQueue)
+        if isempty(READY_QUEUE)
             wait(CLOCK_CYCLE)
             continue
         end
 
-        readyList = []
-        min_EFT = Inf
-        pj = -1
+        ready_list = []
+        max_rank   = Inf * -1
+        min_EFT    = Inf
+        pj         = -1
+        ni         = -1
 
-        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
-            ID = dequeue!(ReadyQueue)
-            push!(readyList, ID)
+        # Empty the queue to start scheduling
+        while(!isempty(READY_QUEUE))
+            ID = dequeue!(READY_QUEUE)
+            push!(ready_list, ID)
         end
 
-        while(length(readyList) > 0)
-            readyList = sort(readyList, lt=(a, b) -> rankU[a] > rankU[b])
-            ni = readyList[1]
-            deleteat!(readyList, 1)
+        while(length(ready_list) > 0)
+            # Max Rank Task
+            for task in ready_list
+                if rank[task] > max_rank
+                    max_rank = rank[task]
+                    ni = task
+                end
+            end
 
-            EFT(n, p) = WIJ_heft(n, p) + EST_heft(n, p, aft)
+            # Minimum EFT Processor
+            for j in 1:length(PROCESSORS)
+                if EFT(ni, j, aft) < min_EFT
+                    min_EFT = EFT(ni, j, aft)
+                    pj = j
+                end
+            end
 
+            wik = min(map(k->WIJ(ni, k), 1:length(PROCESSORS))...)
+
+            if WIJ(ni, pj) <= wik
+                # Schedule this task to start on that processor
+                @schedule now Dispatcher(ni, pj, Cost(ni), CommCost(ni, pj))
+            else
+                pk = filter(k->WIJ(ni, k) === wik, 1:length(PROCESSORS))[begin]
+
+                wa_numerator    = EFT(ni, pj, aft) - EFT(ni, pk, aft)
+                wa_denominator  = EFT(ni, pj, aft) / EFT(ni, pk, aft)
+
+                weight_ni       = WIJ(ni, pj) / TASKS[ni].Cost
+
+                weight_abstract = abs(wa_numerator/wa_denominator)
+                cross_threshold = abs(weight_ni/weight_abstract)
+
+                if cross_threshold <= 1-rand()
+                    @schedule now Dispatcher(ni, pj, Cost(ni), CommCost(ni, pj))
+                else
+                    @schedule now Dispatcher(ni, pk, Cost(ni), CommCost(ni, pj))
+                end
+            end
+            filter!(nj->nj!==ni, ready_list)
+            work(CLOCK_CYCLE)
+        end
+    end
+end
+
+function ProposedRank(task_graph)
+    ranks = Dict{Int64,Float64}()
+
+    RecursiveRankTask(ID, ranks) = begin
+        task = task_graph[ID]
+
+        rank = 0.0
+        for child in task.Children
+            new_rank = RecursiveRankTask(child, ranks) + COMMS[Edge(ID, child)]
+            rank = max(new_rank, rank)
+        end
+
+        ranks[ID] = task.Cost + rank
+        return ranks[ID]
+    end
+
+    RecursiveRankTask(0, ranks)
+
+    return ranks
+end
+
+
+# ----------------------- End Proposed -------------------------
+
+# ----------------------------- Begin HEFT -----------------------------
+@process HEFTScheduler() begin
+    global SCHEDULER = "HEFTScheduler"
+    rank = UpwardRank(TASKS, COMMS)
+    aft = AFT(rank, PROCESSORS)
+
+    while(true)
+        if isempty(READY_QUEUE)
+            wait(CLOCK_CYCLE)
+            continue
+        end
+
+        ready_list = []
+        min_EFT    = Inf
+        pj         = -1
+        ni         = -1
+
+        while(!isempty(READY_QUEUE)) # Empty the queue to start scheduling
+            ID = dequeue!(READY_QUEUE)
+            push!(ready_list, ID)
+        end
+
+        while(length(ready_list) > 0)
+            ready_list = sort(ready_list, lt=(a, b) -> rank[a] > rank[b])
+            ni = ready_list[1]
+            deleteat!(ready_list, 1)
 
             for j in 1:length(PROCESSORS)
-                if EFT(ni, j) < min_EFT
-                    min_EFT = EFT(ni, j)
+                if EFT(ni, j, aft) < min_EFT
+                    min_EFT = EFT(ni, j, aft)
                     pj = j
                 end
             end
 
             comm_cost = 0
-            if !isempty(parentsof(ni, tasks))
-                for parent in parentsof(ni, tasks)
+            if !isempty(parentsof(ni, TASKS))
+                for parent in parentsof(ni, TASKS)
                     if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
                         cij = 0
                     else
-                        comm_cost += comms[Edge(ni, parent)]
+                        comm_cost += COMMS[Edge(ni, parent)]
                     end
                 end
             end
 
-            @schedule now Dispatcher(ni, pj, comm_cost, tasks[ni].Cost)
+            @schedule now Dispatcher(ni, pj, Cost(ni), CommCost(ni, pj))
         end
 
         work(CLOCK_CYCLE)
     end
 end
+
+function UpwardRank(task, communication)
+    ranks = Dict{Int64, Int64}()
+
+    RecursiveRankTask(ID, ranks) = begin
+
+        rank = 0.0
+        for child in task[ID].Children
+            new_rank = communication[Edge(ID, child)] + RecursiveRankTask(child, ranks)
+
+            rank = max(new_rank, rank)
+        end
+        ranks[ID] = task[ID].Cost + rank
+    end
+
+    RecursiveRankTask(0, ranks)
+
+    return ranks
+end
+
 # ----------------------------- End HEFT -----------------------------
 
 # ----------------------------- Begin PEFT -----------------------------
-function W_peft(tj, pw)
-    return PROCESSORS[pw].Multiplier * tasks[tj].Cost
-end
+@process PEFTScheduler() begin
+    global SCHEDULER = "PEFTScheduler"
+    oct = OCT(TASKS)
+    rank_oct = RankOCT(oct, TASKS)
+    aft = AFT(rank_oct, PROCESSORS)
 
+    while(true)
+        if isempty(READY_QUEUE)
+            wait(CLOCK_CYCLE)
+            continue
+        end
+
+        ready_list  = []
+        min_OEFT    = Inf
+        pj          = -1
+        ni          = -1
+
+        # Empty the queue to start scheduling
+        while(!isempty(READY_QUEUE))
+            ID = dequeue!(READY_QUEUE)
+            push!(ready_list, ID)
+        end
+
+        while(length(ready_list) > 0)
+            ready_list = sort(ready_list, lt=(a, b) -> rank_oct[a] > rank_oct[b])
+            ni = ready_list[1]
+            deleteat!(ready_list, 1)
+
+            OEFT(n, p) = EFT(n, p, aft) + oct[n][p]
+
+            for j in 1:length(PROCESSORS)
+                if OEFT(ni, j) < min_OEFT
+                    min_OEFT = OEFT(ni, j)
+                    pj = j
+                end
+            end
+
+            @schedule now Dispatcher(ni, pj, Cost(ni), CommCost(ni, pj))
+        end
+        work(CLOCK_CYCLE)
+    end
+end
 function OCT(tasks) # Paper used recursion but... it blows the stack.
     exit_task = max(unique(collect(keys(tasks)))...)
     oct = Dict{Int64, Array{Int64, 1}}()
@@ -314,7 +302,7 @@ function OCT(tasks) # Paper used recursion but... it blows the stack.
                 for pw in 1:length(PROCESSORS)
                     child_oct = oct[child][pw]
                     child_cost = tasks[child].Cost
-                    child_comm_cost = pw === pj ? 0 : comms[Edge(ni, child)]
+                    child_comm_cost = pw === pj ? 0 : COMMS[Edge(ni, child)]
                     new_min_oct = child_oct + child_cost + child_comm_cost
                     if new_min_oct < min_child_oct
                         min_child_oct = new_min_oct
@@ -332,120 +320,28 @@ function OCT(tasks) # Paper used recursion but... it blows the stack.
     return oct
 end
 
-function RankOct(oct, tasks)
+function RankOCT(oct, tasks)
     ranks = Dict{Int64, Int64}()
     for (ti, _) in tasks
-        ranks[ti] = sum(map(pj->oct[ti][pj], 1:length(PROCESSORS)))
+        ranks[ti] = sum(map(pj->oct[ti][pj], 1:length(PROCESSORS))) / length(PROCESSORS)
     end
     return ranks
 end
 
-function WIJ_peft(ni, pj)
-    return PROCESSORS[pj].Multiplier * tasks[ni].Cost
-end
 
-function AFT_peft(ranks, processors)
-    aft = Dict{Int64,Float64}()
-
-    for (ID, rank) in ranks
-        aft[ID] = max(((p->p.Multiplier*rank).(processors))...) |> round
-    end
-
-    return aft
-end
-
-function EST_peft(ni, pj, aft)
-    available = current_time() + TotalWork(PROCESSORS[pj])
-    max_pred = 0
-
-    for parent in parentsof(ni, tasks)
-        cij = comms[Edge(ni, parent)]
-        if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
-            cij = 0
-        end
-        new_pred = aft[parent] + cij
-        if new_pred > max_pred
-            max_pred = new_pred
-        end
-    end
-
-    return max(available, max_pred)
-end
-
-
-@process PEFTScheduler(RUN_PATH) begin
-    oct = OCT(tasks)
-    rank_oct = RankOct(oct, tasks)
-    aft = AFT_peft(rank_oct, PROCESSORS)
-
-    open("$(RUN_PATH)/runtimes.txt", "a") do file
-        write(file, "$(aft[0]),")
-    end
-
-    while(true)
-        if isempty(ReadyQueue)
-            wait(CLOCK_CYCLE)
-            continue
-        end
-
-        readyList = []
-        min_oEFT = Inf
-        pj = -1
-
-        while(!isempty(ReadyQueue)) # Empty the queue to start scheduling
-            ID = dequeue!(ReadyQueue)
-            push!(readyList, ID)
-        end
-
-        while(length(readyList) > 0)
-            readyList = sort(readyList, lt=(a, b) -> rank_oct[a] > rank_oct[b])
-            ni = readyList[1]
-            deleteat!(readyList, 1)
-
-
-            EFT(n, p) = WIJ_peft(n, p) + EST_peft(n, p, aft)
-            Oeft(n, p) = EFT(n, p) + oct[n][p]
-
-            for j in 1:length(PROCESSORS)
-                if Oeft(ni, j) < min_oEFT
-                    min_oEFT = Oeft(ni, j)
-                    pj = j
-                end
-            end
-
-            comm_cost = 0
-            if !isempty(parentsof(ni, tasks))
-                for parent in parentsof(ni, tasks)
-                    if parent in PROCESSORS[pj].queue || parent === PROCESSORS[pj].task
-                        cij = 0
-                    else
-                        comm_cost += comms[Edge(ni, parent)]
-                    end
-                end
-            end
-
-            @schedule now Dispatcher(ni, pj, comm_cost, tasks[ni].Cost)
-        end
-        work(CLOCK_CYCLE)
-    end
-end
 # ----------------------------- End PEFT -----------------------------
 
 # ----------------------------- Begin FCFS -----------------------------
 @process FCFSScheduler() begin
-
-    open("$(RUN_PATH)/runtimes.txt", "a") do file
-        write(file, "$(aft[0]),")
-    end
-
+    global SCHEDULER = "FCFSScheduler"
     processor = 0
     while(true)
-        if !isempty(ReadyQueue)
-            ID = dequeue!(ReadyQueue)
-            work_time = tasks[ID].Cost
-            parents   = parentsof(ID, tasks)
-            comm_cost     = sum(map(p->comms[Edge(p, ID)], parents))
-            @schedule now Dispatcher(ID, processor, work_time, comm_cost)
+        if !isempty(READY_QUEUE)
+            ID            = dequeue!(READY_QUEUE)
+            parents       = parentsof(ID, TASKS)
+            comm_cost     = sum(map(p->COMMS[Edge(p, ID)], parents))
+
+            @schedule now Dispatcher(ID, processor, Cost(ID), CommCost(ID, processor))
         end
 
         processor = processor === length(PROCESSORS) ? 1 : processor + 1
